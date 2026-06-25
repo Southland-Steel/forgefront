@@ -4,16 +4,6 @@ require_once __DIR__ . '/../includes/auth.php';
 Auth::requireLogin();
 $pdo = getPDO();
 
-$pdo->exec("CREATE TABLE IF NOT EXISTS servers (
-    server_id   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    name        VARCHAR(100)                    NOT NULL,
-    host        VARCHAR(255)                    NOT NULL,
-    port        INT UNSIGNED                    NOT NULL DEFAULT 80,
-    protocol    ENUM('tcp','http','https')      NOT NULL DEFAULT 'tcp',
-    description VARCHAR(255)                    NULL,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)");
-
 $servers = $pdo->query("SELECT * FROM servers ORDER BY name")->fetchAll();
 include __DIR__ . '/../includes/header.php';
 ?>
