@@ -49,10 +49,10 @@ if ($type === 'barcode') {
          . "^PW406\n"
          . "^LL609\n"
          . "^CI28\n"
-         . "^FO10,10^BQN,2,6^FDMA,{$scanUrl}^FS\n"
-         . "^FO10,235^A0N,50,50^FD{$assetTag}^FS\n"
-         . "^FO10,290^A0N,28,28^FD{$category}^FS\n"
-         . "^FO10,323^A0N,28,28^FD{$makeModel}^FS\n"
+         . "^FO30,15^BQN,2,5^FDMA,{$scanUrl}^FS\n"
+         . "^FO15,215^A0N,50,50^FD{$assetTag}^FS\n"
+         . "^FO15,270^A0N,28,28^FD{$category}^FS\n"
+         . "^FO15,303^A0N,28,28^FD{$makeModel}^FS\n"
          . "^XZ";
 }
 

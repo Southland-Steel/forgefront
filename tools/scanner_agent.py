@@ -17,7 +17,7 @@ import time
 import sys
 
 # ── Config ────────────────────────────────────────────────────────────────────
-ENDPOINT        = 'http://forgefront.test/it_manager/ajax/scan_toggle_agent.php'
+ENDPOINT        = 'http://192.168.81.123/it_manager/ajax/scan_toggle_agent.php'
 TOKEN           = '3b6713e0cf5f8b2c371b4d5bcde052bf636ba54b7cd7db83e01302f9e752f8ec'
 ASSET_PATTERN   = re.compile(r'^FF-\d+$', re.IGNORECASE)
 MAX_CHAR_GAP    = 0.05   # 50ms — scanners type far faster than humans
