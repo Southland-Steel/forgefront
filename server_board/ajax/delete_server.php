@@ -10,5 +10,8 @@ $pdo  = getPDO();
 
 if (!$id) { echo json_encode(['success' => false, 'error' => 'Missing server ID.']); exit; }
 
-$pdo->prepare("DELETE FROM servers WHERE server_id = ?")->execute([$id]);
+$pdo->prepare("DELETE FROM server_checks    WHERE server_id = ?")->execute([$id]);
+$pdo->prepare("DELETE FROM server_incidents WHERE server_id = ?")->execute([$id]);
+$pdo->prepare("DELETE FROM servers          WHERE server_id = ?")->execute([$id]);
+
 echo json_encode(['success' => true]);

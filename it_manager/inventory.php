@@ -9,13 +9,19 @@ include __DIR__ . '/../includes/header.php';
 .filter-card .card-body { padding: 0.75rem 1.25rem; }
 .asset-tag-link { font-family: monospace; font-weight: 700; color: #002f77; text-decoration: none; }
 .asset-tag-link:hover { text-decoration: underline; color: #001d4a; }
+.row-cb { width: 16px; height: 16px; cursor: pointer; }
 </style>
 <div class="container-fluid px-4 pt-3">
     <div class="page-header d-flex justify-content-between align-items-center mb-3">
         <h4 class="page-title"><i class="fas fa-box me-2 it-header-icon"></i>IT Inventory</h4>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAssetModal">
-            <i class="fas fa-plus me-1"></i>Add Asset
-        </button>
+        <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-danger d-none" id="bulkDeleteBtn" onclick="openBulkDeleteModal()">
+                <i class="fas fa-trash-can me-1"></i>Delete Selected (<span id="bulkCount">0</span>)
+            </button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAssetModal">
+                <i class="fas fa-plus me-1"></i>Add Asset
+            </button>
+        </div>
     </div>
 
     <!-- Filters -->
@@ -60,7 +66,8 @@ include __DIR__ . '/../includes/header.php';
             </div>
             <table class="table table-hover mb-0" id="assetsTable" style="display:none">
                 <thead><tr>
-                    <th class="ps-3">Tag</th>
+                    <th class="ps-3" style="width:36px"><input type="checkbox" class="row-cb" id="selectAllChk" title="Select all"></th>
+                    <th>Tag</th>
                     <th>Category</th>
                     <th>Make / Model</th>
                     <th>Serial #</th>
@@ -185,8 +192,9 @@ function renderAssets(assets) {
     empty.style.display = 'none';
     table.style.display = 'table';
     tbody.innerHTML = assets.map(a => `
-        <tr>
-            <td class="ps-3"><a href="/it_manager/asset.php?id=${a.asset_id}" class="asset-tag text-decoration-none">${a.asset_tag}</a></td>
+        <tr data-id="${a.asset_id}">
+            <td class="ps-3"><input type="checkbox" class="row-cb asset-cb" data-id="${a.asset_id}"></td>
+            <td><a href="/it_manager/asset.php?id=${a.asset_id}" class="asset-tag text-decoration-none">${a.asset_tag}</a></td>
             <td class="text-muted small">${a.category_name ?? ''}</td>
             <td>${[a.make, a.model].filter(Boolean).join(' ') || '<span class="text-muted">—</span>'}</td>
             <td class="text-muted small" style="font-family:monospace">${a.serial_number ?? '—'}</td>
@@ -199,6 +207,7 @@ function renderAssets(assets) {
             </td>
         </tr>
     `).join('');
+    updateBulkBar();
 }
 
 function loadDropdowns() {
@@ -315,5 +324,86 @@ document.getElementById('deleteAssetModal').addEventListener('hidden.bs.modal', 
     pendingDeleteAssetId = null;
     document.getElementById('deleteAssetMsg').textContent = '';
 });
+
+// ── Bulk selection ──────────────────────────────────────────
+function getChecked() {
+    return [...document.querySelectorAll('.asset-cb:checked')].map(cb => parseInt(cb.dataset.id));
+}
+
+function updateBulkBar() {
+    const ids = getChecked();
+    const btn = document.getElementById('bulkDeleteBtn');
+    document.getElementById('bulkCount').textContent = ids.length;
+    btn.classList.toggle('d-none', ids.length === 0);
+
+    const allCbs = document.querySelectorAll('.asset-cb');
+    const sel = document.getElementById('selectAllChk');
+    if (sel) {
+        sel.indeterminate = ids.length > 0 && ids.length < allCbs.length;
+        sel.checked = allCbs.length > 0 && ids.length === allCbs.length;
+    }
+}
+
+document.getElementById('assetsBody').addEventListener('change', e => {
+    if (e.target.classList.contains('asset-cb')) updateBulkBar();
+});
+
+document.getElementById('selectAllChk').addEventListener('change', function() {
+    document.querySelectorAll('.asset-cb').forEach(cb => cb.checked = this.checked);
+    updateBulkBar();
+});
+
+function openBulkDeleteModal() {
+    const ids = getChecked();
+    if (!ids.length) return;
+    document.getElementById('bulkDeleteMsg').textContent =
+        `Permanently delete ${ids.length} selected asset${ids.length > 1 ? 's' : ''}? This cannot be undone.`;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('bulkDeleteModal')).show();
+}
+
+document.getElementById('bulkDeleteConfirmBtn').addEventListener('click', () => {
+    const ids = getChecked();
+    if (!ids.length) return;
+    const btn = document.getElementById('bulkDeleteConfirmBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Deleting…';
+    fetch('/it_manager/ajax/bulk_delete_assets.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asset_ids: ids })
+    }).then(r => r.json()).then(d => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-trash-can me-1"></i>Delete';
+        if (d.success) {
+            bootstrap.Modal.getInstance(document.getElementById('bulkDeleteModal')).hide();
+            loadAssets();
+        } else {
+            document.getElementById('bulkDeleteMsg').innerHTML =
+                `<span class="text-danger"><i class="fas fa-circle-xmark me-1"></i>${d.error}</span>`;
+        }
+    });
+});
+
+document.getElementById('bulkDeleteModal').addEventListener('hidden.bs.modal', () => {
+    document.getElementById('bulkDeleteMsg').textContent = '';
+});
 </script>
+<!-- Bulk Delete Modal -->
+<div class="modal fade" id="bulkDeleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title text-danger"><i class="fas fa-triangle-exclamation me-2"></i>Delete Assets</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p id="bulkDeleteMsg" class="mb-0"></p>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-danger btn-sm" id="bulkDeleteConfirmBtn"><i class="fas fa-trash-can me-1"></i>Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
 <?php include __DIR__ . '/../includes/footer.php'; ?>
