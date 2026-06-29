@@ -270,6 +270,25 @@ window.addEventListener('load', () => {
 });
 <?php endif; ?>
 </script>
+<!-- Bulk Delete Modal -->
+<div class="modal fade" id="bulkDeleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title text-danger"><i class="fas fa-triangle-exclamation me-2"></i>Delete Assets</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p id="bulkDeleteMsg" class="mb-0"></p>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-danger btn-sm" id="bulkDeleteConfirmBtn"><i class="fas fa-trash-can me-1"></i>Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Confirm Delete Asset Modal -->
 <div class="modal fade" id="deleteAssetModal" tabindex="-1">
     <div class="modal-dialog">
@@ -388,22 +407,4 @@ document.getElementById('bulkDeleteModal').addEventListener('hidden.bs.modal', (
     document.getElementById('bulkDeleteMsg').textContent = '';
 });
 </script>
-<!-- Bulk Delete Modal -->
-<div class="modal fade" id="bulkDeleteModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header border-0 pb-0">
-                <h5 class="modal-title text-danger"><i class="fas fa-triangle-exclamation me-2"></i>Delete Assets</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body pt-2">
-                <p id="bulkDeleteMsg" class="mb-0"></p>
-            </div>
-            <div class="modal-footer border-0 pt-0">
-                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button class="btn btn-danger btn-sm" id="bulkDeleteConfirmBtn"><i class="fas fa-trash-can me-1"></i>Delete</button>
-            </div>
-        </div>
-    </div>
-</div>
 <?php include __DIR__ . '/../includes/footer.php'; ?>
