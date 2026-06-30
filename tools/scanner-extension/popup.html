@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; width: 320px; background: #f9fafb; color: #111827; font-size: 13px; }
+
+.header { background: #002f77; color: #fff; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
+.header h1 { font-size: 13px; font-weight: 700; letter-spacing: .03em; }
+.conn-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; background: rgba(255,255,255,.15); }
+.conn-badge.ok  { background: rgba(34,197,94,.3);  color: #d1fae5; }
+.conn-badge.err { background: rgba(239,68,68,.3);  color: #fee2e2; }
+
+.tabs { display: flex; background: #fff; border-bottom: 1px solid #e5e7eb; }
+.tab  { flex: 1; padding: 8px 0; text-align: center; font-size: 12px; font-weight: 600;
+        color: #6b7280; cursor: pointer; border-bottom: 2px solid transparent; }
+.tab.active { color: #002f77; border-bottom-color: #002f77; }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* Log */
+#logPanel { max-height: 300px; overflow-y: auto; }
+.log-empty { text-align: center; color: #9ca3af; padding: 28px 0; }
+.log-entry { padding: 8px 14px; border-bottom: 1px solid #f3f4f6; }
+.log-entry:last-child { border-bottom: none; }
+.log-tag  { font-family: monospace; font-weight: 700; font-size: 13px; }
+.log-tag.ok  { color: #16a34a; }
+.log-tag.err { color: #dc2626; }
+.log-sub  { color: #6b7280; font-size: 11px; margin-top: 1px; }
+.log-time { color: #9ca3af; font-size: 11px; }
+.clear-btn { display: block; width: 100%; padding: 6px; background: none; border: none;
+             border-top: 1px solid #e5e7eb; color: #9ca3af; font-size: 11px; cursor: pointer; }
+.clear-btn:hover { color: #dc2626; background: #fef2f2; }
+
+/* Settings */
+#settingsPanel { padding: 14px; }
+.form-group { margin-bottom: 12px; }
+label { display: block; font-size: 11px; font-weight: 700; color: #374151; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+input { width: 100%; padding: 6px 9px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; font-family: monospace; }
+input:focus { outline: none; border-color: #002f77; }
+.save-btn { width: 100%; padding: 8px; background: #002f77; color: #fff; border: none;
+            border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.save-btn:hover { background: #001d4a; }
+.saved-msg { text-align: center; color: #16a34a; font-size: 12px; margin-top: 8px; display: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>ForgeFront Scanner</h1>
+    <span class="conn-badge" id="connBadge">Checking…</span>
+</div>
+
+<div class="tabs">
+    <div class="tab active" data-tab="log">Recent Scans</div>
+    <div class="tab" data-tab="settings">Settings</div>
+</div>
+
+<div class="panel active" id="logPanel">
+    <div id="logContainer"><div class="log-empty">No scans yet.</div></div>
+    <button class="clear-btn" id="clearLogBtn">Clear log</button>
+</div>
+
+<div class="panel" id="settingsPanel">
+    <div class="form-group">
+        <label>Server Endpoint</label>
+        <input type="text" id="cfgEndpoint">
+    </div>
+    <div class="form-group">
+        <label>Agent Token</label>
+        <input type="text" id="cfgToken">
+    </div>
+    <button class="save-btn" id="saveBtn">Save &amp; Test Connection</button>
+    <div class="saved-msg" id="savedMsg">Saved!</div>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

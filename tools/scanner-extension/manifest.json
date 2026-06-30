@@ -1,0 +1,33 @@
+{
+    "manifest_version": 2,
+    "name": "ForgeFront Scanner",
+    "version": "1.0",
+    "description": "Intercepts USB barcode scanner input and sends to the ForgeFront asset system.",
+    "permissions": [
+        "storage",
+        "tabs",
+        "http://192.168.81.123/*"
+    ],
+    "background": {
+        "scripts": ["background.js"],
+        "persistent": true
+    },
+    "content_scripts": [
+        {
+            "matches": ["<all_urls>"],
+            "js": ["content.js"],
+            "run_at": "document_start",
+            "all_frames": false
+        }
+    ],
+    "browser_action": {
+        "default_popup": "popup.html",
+        "default_title": "ForgeFront Scanner"
+    },
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "forgefront-scanner@southlandsteel.com",
+            "strict_min_version": "57.0"
+        }
+    }
+}
