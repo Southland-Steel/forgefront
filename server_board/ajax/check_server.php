@@ -56,9 +56,9 @@ switch ($protocol) {
         $escaped = escapeshellarg($host);
         $canExec = function_exists('exec') && !in_array('exec', array_map('trim', explode(',', ini_get('disable_functions'))));
         if ($canExec) {
-            exec("ping -c 1 -W 1 $escaped 2>&1", $out, $ret);
+            exec("ping -n 1 -w 1000 $escaped 2>&1", $out, $ret);
             foreach ($out as $line) {
-                if (preg_match('/time[=<]([\d.]+)\s*ms/i', $line, $m)) {
+                if (preg_match('/[=<]([\d]+)ms/i', $line, $m)) {
                     $ms = (int)round((float)$m[1]);
                     break;
                 }
