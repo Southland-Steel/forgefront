@@ -130,7 +130,8 @@ include __DIR__ . '/../includes/header.php';
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Assign to Employee</label>
-                        <select class="form-select" id="newEmployee">
+                        <input type="text" class="form-control mb-1" id="newEmployeeSearch" placeholder="Search employees…">
+                        <select class="form-select" id="newEmployee" size="4" style="height:auto">
                             <option value="">None</option>
                         </select>
                     </div>
@@ -210,16 +211,28 @@ function renderAssets(assets) {
     updateBulkBar();
 }
 
+let allEmployeeOptions = [];
+function filterEmployeeSelect(searchId, selectId) {
+    const q   = document.getElementById(searchId).value.toLowerCase();
+    const sel = document.getElementById(selectId);
+    sel.innerHTML = '<option value="">None</option>';
+    allEmployeeOptions
+        .filter(e => !q || e.name.toLowerCase().includes(q))
+        .forEach(e => sel.insertAdjacentHTML('beforeend', `<option value="${e.employee_id}">${e.name}</option>`));
+}
+
 function loadDropdowns() {
     fetch('/it_manager/ajax/get_employees.php').then(r => r.json()).then(data => {
-        const sel = document.getElementById('newEmployee');
-        data.forEach(e => sel.insertAdjacentHTML('beforeend', `<option value="${e.employee_id}">${e.name}</option>`));
+        allEmployeeOptions = data;
+        filterEmployeeSelect('newEmployeeSearch', 'newEmployee');
     });
     fetch('/it_manager/ajax/get_locations.php').then(r => r.json()).then(data => {
         const sel = document.getElementById('newLocation');
         data.forEach(l => sel.insertAdjacentHTML('beforeend', `<option value="${l.location_id}">${l.campus_name} — ${l.name}</option>`));
     });
 }
+
+document.getElementById('newEmployeeSearch').addEventListener('input', () => filterEmployeeSelect('newEmployeeSearch', 'newEmployee'));
 
 document.getElementById('addAssetModal').addEventListener('show.bs.modal', () => {
     fetch('/it_manager/ajax/get_assets.php?next_tag=1').then(r => r.json()).then(d => {

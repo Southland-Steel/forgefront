@@ -229,7 +229,8 @@ include __DIR__ . '/../includes/header.php';
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Employee</label>
-                    <select class="form-select" id="assignEmployee">
+                    <input type="text" class="form-control mb-1" id="assignEmployeeSearch" placeholder="Search employees…">
+                    <select class="form-select" id="assignEmployee" size="4" style="height:auto">
                         <option value="">None</option>
                         <?php foreach ($employees as $e): ?>
                         <option value="<?= $e['employee_id'] ?>" <?= $asset['assigned_employee_id'] == $e['employee_id'] ? 'selected' : '' ?>>
@@ -427,6 +428,29 @@ document.getElementById('printLabelBtn').addEventListener('click', () => {
 
 document.getElementById('printLabelModal').addEventListener('hidden.bs.modal', () => {
     document.getElementById('printLabelMsg').style.display = 'none';
+});
+
+// Searchable employee select in assign modal
+const assignEmployeeList = <?= json_encode(array_map(fn($e) => ['id' => $e['employee_id'], 'name' => $e['name']], $employees)) ?>;
+const currentEmpId = <?= (int)($asset['assigned_employee_id'] ?? 0) ?>;
+
+function filterAssignEmployees() {
+    const q   = document.getElementById('assignEmployeeSearch').value.toLowerCase();
+    const sel = document.getElementById('assignEmployee');
+    const cur = parseInt(sel.value) || 0;
+    sel.innerHTML = '<option value="">None</option>';
+    assignEmployeeList
+        .filter(e => !q || e.name.toLowerCase().includes(q))
+        .forEach(e => {
+            const opt = new Option(e.name, e.id, false, e.id === (cur || currentEmpId));
+            sel.add(opt);
+        });
+}
+
+document.getElementById('assignEmployeeSearch').addEventListener('input', filterAssignEmployees);
+document.getElementById('assignModal').addEventListener('show.bs.modal', () => {
+    document.getElementById('assignEmployeeSearch').value = '';
+    filterAssignEmployees();
 });
 
 document.getElementById('saveEditBtn').addEventListener('click', () => {
