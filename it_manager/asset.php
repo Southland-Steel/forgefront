@@ -229,15 +229,16 @@ include __DIR__ . '/../includes/header.php';
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Employee</label>
-                    <input type="text" class="form-control mb-1" id="assignEmployeeSearch" placeholder="Search employees…">
-                    <select class="form-select" id="assignEmployee" size="4" style="height:auto">
-                        <option value="">None</option>
-                        <?php foreach ($employees as $e): ?>
-                        <option value="<?= $e['employee_id'] ?>" <?= $asset['assigned_employee_id'] == $e['employee_id'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($e['name']) ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <div class="emp-select-wrap" id="assignEmpWrap">
+                        <div class="form-select emp-select-display" id="assignEmpDisplay" tabindex="0">None</div>
+                        <div class="emp-select-dropdown" id="assignEmpDropdown" style="display:none">
+                            <div class="p-2 border-bottom">
+                                <input type="text" class="form-control form-control-sm" id="assignEmpSearch" placeholder="Search employees…" autocomplete="off">
+                            </div>
+                            <div class="emp-select-list" id="assignEmpList"></div>
+                        </div>
+                        <input type="hidden" id="assignEmployee" value="<?= (int)($asset['assigned_employee_id'] ?? 0) ?: '' ?>">
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Location</label>
@@ -355,6 +356,54 @@ include __DIR__ . '/../includes/header.php';
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<style>
+.emp-select-wrap { position: relative; }
+.emp-select-display { cursor: pointer; user-select: none; }
+.emp-select-dropdown { position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 1060;
+    background: #fff; border: 1px solid #dee2e6; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+.emp-select-list { max-height: 180px; overflow-y: auto; }
+.emp-option { padding: 6px 12px; cursor: pointer; font-size: .875rem; }
+.emp-option:hover { background: #f0f4ff; }
+.emp-option.active { background: #e8edff; font-weight: 600; }
+</style>
+<script>
+function initEmpDropdown(wrapId, displayId, dropdownId, searchId, listId, hiddenId, employees, selectedId) {
+    const wrap     = document.getElementById(wrapId);
+    const display  = document.getElementById(displayId);
+    const dropdown = document.getElementById(dropdownId);
+    const search   = document.getElementById(searchId);
+    const list     = document.getElementById(listId);
+    const hidden   = document.getElementById(hiddenId);
+
+    let curId   = selectedId != null ? String(selectedId) : '';
+    let curName = curId ? (employees.find(e => String(e.employee_id) === curId)?.name ?? 'None') : 'None';
+    display.textContent = curName;
+    hidden.value = curId;
+
+    function renderList(q) {
+        const filtered = employees.filter(e => !q || e.name.toLowerCase().includes(q.toLowerCase()));
+        list.innerHTML = `<div class="emp-option${!curId ? ' active' : ''}" data-id="" data-name="None">None</div>`
+            + filtered.map(e => `<div class="emp-option${String(e.employee_id) === curId ? ' active' : ''}" data-id="${e.employee_id}" data-name="${e.name}">${e.name}</div>`).join('');
+    }
+
+    display.addEventListener('click', () => {
+        if (dropdown.style.display === 'none') {
+            search.value = ''; renderList(''); dropdown.style.display = 'block'; search.focus();
+        } else {
+            dropdown.style.display = 'none';
+        }
+    });
+    search.addEventListener('input', () => renderList(search.value));
+    list.addEventListener('click', e => {
+        const item = e.target.closest('.emp-option');
+        if (!item) return;
+        curId = item.dataset.id; curName = item.dataset.name;
+        hidden.value = curId; display.textContent = curName;
+        dropdown.style.display = 'none';
+    });
+    document.addEventListener('click', e => { if (wrap && !wrap.contains(e.target)) dropdown.style.display = 'none'; });
+}
+</script>
 <script>
 new QRCode(document.getElementById('qrcode'), {
     text: '<?= APP_BASE_URL ?>/it_manager/scan.php?tag=<?= urlencode($asset['asset_tag']) ?>',
@@ -430,28 +479,10 @@ document.getElementById('printLabelModal').addEventListener('hidden.bs.modal', (
     document.getElementById('printLabelMsg').style.display = 'none';
 });
 
-// Searchable employee select in assign modal
-const assignEmployeeList = <?= json_encode(array_map(fn($e) => ['id' => $e['employee_id'], 'name' => $e['name']], $employees)) ?>;
-const currentEmpId = <?= (int)($asset['assigned_employee_id'] ?? 0) ?>;
-
-function filterAssignEmployees() {
-    const q   = document.getElementById('assignEmployeeSearch').value.toLowerCase();
-    const sel = document.getElementById('assignEmployee');
-    const cur = parseInt(sel.value) || 0;
-    sel.innerHTML = '<option value="">None</option>';
-    assignEmployeeList
-        .filter(e => !q || e.name.toLowerCase().includes(q))
-        .forEach(e => {
-            const opt = new Option(e.name, e.id, false, e.id === (cur || currentEmpId));
-            sel.add(opt);
-        });
-}
-
-document.getElementById('assignEmployeeSearch').addEventListener('input', filterAssignEmployees);
-document.getElementById('assignModal').addEventListener('show.bs.modal', () => {
-    document.getElementById('assignEmployeeSearch').value = '';
-    filterAssignEmployees();
-});
+// Searchable employee dropdown in assign modal
+const assignEmployeeList = <?= json_encode($employees) ?>;
+const assignCurrentEmpId = '<?= (int)($asset['assigned_employee_id'] ?? 0) ?: '' ?>';
+initEmpDropdown('assignEmpWrap', 'assignEmpDisplay', 'assignEmpDropdown', 'assignEmpSearch', 'assignEmpList', 'assignEmployee', assignEmployeeList, assignCurrentEmpId);
 
 document.getElementById('saveEditBtn').addEventListener('click', () => {
     fetch('/it_manager/ajax/save_asset.php', {

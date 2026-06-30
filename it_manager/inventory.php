@@ -130,10 +130,16 @@ include __DIR__ . '/../includes/header.php';
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Assign to Employee</label>
-                        <input type="text" class="form-control mb-1" id="newEmployeeSearch" placeholder="Search employees…">
-                        <select class="form-select" id="newEmployee" size="4" style="height:auto">
-                            <option value="">None</option>
-                        </select>
+                        <div class="emp-select-wrap" id="newEmpWrap">
+                            <div class="form-select emp-select-display" id="newEmpDisplay" tabindex="0">None</div>
+                            <div class="emp-select-dropdown" id="newEmpDropdown" style="display:none">
+                                <div class="p-2 border-bottom">
+                                    <input type="text" class="form-control form-control-sm" id="newEmpSearch" placeholder="Search employees…" autocomplete="off">
+                                </div>
+                                <div class="emp-select-list" id="newEmpList"></div>
+                            </div>
+                            <input type="hidden" id="newEmployee" value="">
+                        </div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Assign to Location</label>
@@ -155,7 +161,64 @@ include __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
+<style>
+.emp-select-wrap { position: relative; }
+.emp-select-display { cursor: pointer; user-select: none; }
+.emp-select-dropdown { position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 1060;
+    background: #fff; border: 1px solid #dee2e6; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+.emp-select-list { max-height: 180px; overflow-y: auto; }
+.emp-option { padding: 6px 12px; cursor: pointer; font-size: .875rem; }
+.emp-option:hover { background: #f0f4ff; }
+.emp-option.active { background: #e8edff; font-weight: 600; }
+</style>
 <script>
+function initEmpDropdown(wrapId, displayId, dropdownId, searchId, listId, hiddenId, employees, selectedId) {
+    const wrap     = document.getElementById(wrapId);
+    const display  = document.getElementById(displayId);
+    const dropdown = document.getElementById(dropdownId);
+    const search   = document.getElementById(searchId);
+    const list     = document.getElementById(listId);
+    const hidden   = document.getElementById(hiddenId);
+
+    let curId   = selectedId != null ? String(selectedId) : '';
+    let curName = curId ? (employees.find(e => String(e.employee_id) === curId)?.name ?? 'None') : 'None';
+    display.textContent = curName;
+    hidden.value = curId;
+
+    function renderList(q) {
+        const filtered = employees.filter(e => !q || e.name.toLowerCase().includes(q.toLowerCase()));
+        list.innerHTML = `<div class="emp-option${!curId ? ' active' : ''}" data-id="" data-name="None">None</div>`
+            + filtered.map(e => `<div class="emp-option${String(e.employee_id) === curId ? ' active' : ''}" data-id="${e.employee_id}" data-name="${e.name}">${e.name}</div>`).join('');
+    }
+
+    display.addEventListener('click', () => {
+        if (dropdown.style.display === 'none') {
+            search.value = '';
+            renderList('');
+            dropdown.style.display = 'block';
+            search.focus();
+        } else {
+            dropdown.style.display = 'none';
+        }
+    });
+
+    search.addEventListener('input', () => renderList(search.value));
+
+    list.addEventListener('click', e => {
+        const item = e.target.closest('.emp-option');
+        if (!item) return;
+        curId   = item.dataset.id;
+        curName = item.dataset.name;
+        hidden.value        = curId;
+        display.textContent = curName;
+        dropdown.style.display = 'none';
+    });
+
+    document.addEventListener('click', e => {
+        if (wrap && !wrap.contains(e.target)) dropdown.style.display = 'none';
+    });
+}
+
 const statusBadge = {
     'Active':    '<span class="badge badge-active">Active</span>',
     'Inactive':  '<span class="badge badge-retired">Inactive</span>',
@@ -211,20 +274,9 @@ function renderAssets(assets) {
     updateBulkBar();
 }
 
-let allEmployeeOptions = [];
-function filterEmployeeSelect(searchId, selectId) {
-    const q   = document.getElementById(searchId).value.toLowerCase();
-    const sel = document.getElementById(selectId);
-    sel.innerHTML = '<option value="">None</option>';
-    allEmployeeOptions
-        .filter(e => !q || e.name.toLowerCase().includes(q))
-        .forEach(e => sel.insertAdjacentHTML('beforeend', `<option value="${e.employee_id}">${e.name}</option>`));
-}
-
 function loadDropdowns() {
     fetch('/it_manager/ajax/get_employees.php').then(r => r.json()).then(data => {
-        allEmployeeOptions = data;
-        filterEmployeeSelect('newEmployeeSearch', 'newEmployee');
+        initEmpDropdown('newEmpWrap', 'newEmpDisplay', 'newEmpDropdown', 'newEmpSearch', 'newEmpList', 'newEmployee', data, '');
     });
     fetch('/it_manager/ajax/get_locations.php').then(r => r.json()).then(data => {
         const sel = document.getElementById('newLocation');
@@ -232,7 +284,12 @@ function loadDropdowns() {
     });
 }
 
-document.getElementById('newEmployeeSearch').addEventListener('input', () => filterEmployeeSelect('newEmployeeSearch', 'newEmployee'));
+document.getElementById('addAssetModal').addEventListener('hidden.bs.modal', () => {
+    const display = document.getElementById('newEmpDisplay');
+    const hidden  = document.getElementById('newEmployee');
+    if (display) display.textContent = 'None';
+    if (hidden)  hidden.value = '';
+});
 
 document.getElementById('addAssetModal').addEventListener('show.bs.modal', () => {
     fetch('/it_manager/ajax/get_assets.php?next_tag=1').then(r => r.json()).then(d => {
