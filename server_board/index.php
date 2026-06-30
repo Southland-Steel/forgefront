@@ -6,10 +6,14 @@ $pdo = getPDO();
 
 $servers = $pdo->query("SELECT * FROM servers ORDER BY name")->fetchAll();
 
-// Uptime % for all servers
-$uptimeMap = [];
+$uptimeMap  = [];
+$statusMap  = [];
+$lastMsMap  = [];
+$lastAtMap  = [];
 if (!empty($servers)) {
-    $ids  = implode(',', array_map('intval', array_column($servers, 'server_id')));
+    $ids = implode(',', array_map('intval', array_column($servers, 'server_id')));
+
+    // 30-day uptime %
     $rows = $pdo->query("
         SELECT server_id,
                ROUND(SUM(status = 'online') / COUNT(*) * 100, 2) AS uptime
@@ -18,6 +22,20 @@ if (!empty($servers)) {
         GROUP BY server_id
     ")->fetchAll();
     foreach ($rows as $r) $uptimeMap[$r['server_id']] = (float)$r['uptime'];
+
+    // Last check status + ms + time per server
+    $rows = $pdo->query("
+        SELECT sc.server_id, sc.status, sc.response_ms, sc.checked_at
+        FROM server_checks sc
+        INNER JOIN (
+            SELECT server_id, MAX(check_id) AS max_id FROM server_checks WHERE server_id IN ($ids) GROUP BY server_id
+        ) latest ON sc.server_id = latest.server_id AND sc.check_id = latest.max_id
+    ")->fetchAll();
+    foreach ($rows as $r) {
+        $statusMap[$r['server_id']] = $r['status'];
+        $lastMsMap[$r['server_id']] = $r['response_ms'];
+        $lastAtMap[$r['server_id']] = $r['checked_at'];
+    }
 }
 
 include __DIR__ . '/../includes/header.php';
@@ -82,15 +100,23 @@ include __DIR__ . '/../includes/header.php';
                     </thead>
                     <tbody>
                         <?php foreach ($servers as $s):
-                            $sid = $s['server_id'];
-                            $u   = $uptimeMap[$sid] ?? null;
-                            $uCls = $u === null ? 'uptime-none' : ($u >= 99 ? 'uptime-high' : ($u >= 95 ? 'uptime-med' : 'uptime-low'));
+                            $sid   = $s['server_id'];
+                            $u     = $uptimeMap[$sid] ?? null;
+                            $uCls  = $u === null ? 'uptime-none' : ($u >= 99 ? 'uptime-high' : ($u >= 95 ? 'uptime-med' : 'uptime-low'));
+                            $st    = $statusMap[$sid] ?? null;
+                            $stMs  = $lastMsMap[$sid] ?? null;
+                            $stAt  = $lastAtMap[$sid] ?? null;
+                            $dotCls = $st ?? 'checking';
+                            if ($st === 'online')       $stLabel = 'Online' . ($stMs !== null ? ' <span class="ms-badge">' . $stMs . 'ms</span>' : '');
+                            elseif ($st === 'offline')  $stLabel = '<span class="text-danger">Offline</span>';
+                            elseif ($st === 'warning')  $stLabel = '<span class="text-warning">Degraded</span>';
+                            else                        $stLabel = '<span class="text-muted">No data</span>';
                         ?>
                         <tr class="srv-row" onclick="window.location='/server_board/server.php?id=<?= $sid ?>'">
                             <td class="ps-3">
                                 <div class="status-cell">
-                                    <span class="status-dot checking" id="dot-<?= $sid ?>"></span>
-                                    <span id="status-text-<?= $sid ?>" class="small text-muted">Checking…</span>
+                                    <span class="status-dot <?= $dotCls ?>"></span>
+                                    <span class="small"><?= $stLabel ?></span>
                                 </div>
                             </td>
                             <td class="fw-semibold"><?= htmlspecialchars($s['name']) ?></td>
@@ -116,10 +142,8 @@ include __DIR__ . '/../includes/header.php';
             <?php endif; ?>
         </div>
         <?php if (!empty($servers)): ?>
-        <div class="card-footer text-muted small d-flex align-items-center gap-2 py-2">
-            <i class="fas fa-rotate" id="refreshIcon"></i>
-            <span id="lastChecked">Checking now…</span>
-            <span class="ms-auto">Auto-refreshes every 30s</span>
+        <div class="card-footer text-muted small py-2">
+            <i class="fas fa-rotate me-1"></i>Checked every 5 minutes automatically
         </div>
         <?php endif; ?>
     </div>
@@ -197,47 +221,8 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <script>
-const serverIds = <?= json_encode(array_column($servers, 'server_id')) ?>;
 let pendingDeleteId = null;
 const defaultPorts = { tcp: '', http: 80, https: 443, ping: '', dns: 53, mysql: 3306 };
-
-function setStatus(id, data) {
-    const dot  = document.getElementById(`dot-${id}`);
-    const text = document.getElementById(`status-text-${id}`);
-    if (!dot || !text) return;
-    dot.className = 'status-dot ' + (data.status || 'checking');
-    const msStr = data.ms != null ? ` <span class="ms-badge">${data.ms}ms</span>` : '';
-    if (data.status === 'online')       text.innerHTML = `Online${msStr}`;
-    else if (data.status === 'offline') text.innerHTML = `<span class="text-danger">Offline</span>`;
-    else if (data.status === 'warning') text.innerHTML = `<span class="text-warning">${data.detail}</span>${msStr}`;
-    else text.innerHTML = data.detail || '';
-
-    if (data.uptime_30d !== undefined) {
-        const el  = document.getElementById(`uptime-pct-${id}`);
-        const pct = data.uptime_30d;
-        if (el) {
-            el.textContent = pct !== null ? pct + '%' : '—';
-            el.className   = 'small ' + (pct === null ? 'uptime-none' : pct >= 99 ? 'uptime-high' : pct >= 95 ? 'uptime-med' : 'uptime-low');
-        }
-    }
-}
-
-function checkAll() {
-    const icon = document.getElementById('refreshIcon');
-    if (icon) icon.classList.add('fa-spin');
-    Promise.all(serverIds.map(id =>
-        fetch(`/server_board/ajax/check_server.php?id=${id}`)
-            .then(r => r.json())
-            .then(d => setStatus(id, d))
-            .catch(() => setStatus(id, { status: 'offline', detail: 'Request failed' }))
-    )).then(() => {
-        if (icon) icon.classList.remove('fa-spin');
-        const el = document.getElementById('lastChecked');
-        if (el) el.textContent = 'Last checked: ' + new Date().toLocaleTimeString();
-    });
-}
-
-if (serverIds.length) { checkAll(); setInterval(checkAll, 30000); }
 
 function onProtocolChange() {
     const proto = document.getElementById('serverProtocol').value;

@@ -154,14 +154,11 @@ include __DIR__ . '/../includes/header.php';
             <i class="fas fa-arrow-left me-1"></i>Back
         </a>
         <div class="d-flex align-items-center gap-2">
-            <span class="sdot checking" id="main-dot"></span>
+            <span class="sdot <?= $lastStatus ?? 'checking' ?>" id="main-dot"></span>
             <h4 class="page-title mb-0"><?= htmlspecialchars($server['name']) ?></h4>
             <span class="pbadge pb-<?= $server['protocol'] ?>"><?= strtoupper($server['protocol']) ?></span>
         </div>
         <div class="ms-auto d-flex gap-2">
-            <button class="btn btn-outline-secondary" id="refreshBtn" onclick="runCheck()">
-                <i class="fas fa-rotate me-1" id="refreshIcon"></i>Check Now
-            </button>
             <button class="btn btn-outline-secondary"
                     onclick="openEditModal(<?= htmlspecialchars(json_encode($server)) ?>)">
                 <i class="fas fa-pencil me-1"></i>Edit
@@ -470,8 +467,6 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <script>
-const serverId   = <?= $id ?>;
-
 const tipEl = document.getElementById('tip');
 function showTip(e, text) { tipEl.textContent = text; tipEl.style.display = 'block'; moveTip(e); }
 function moveTip(e) {
@@ -636,69 +631,6 @@ function renderSparkline(history) {
 
     if (avg) avg.textContent = `avg ${mean}ms · min ${min}ms · max ${max}ms`;
 }
-
-function runCheck() {
-    const icon = document.getElementById('refreshIcon');
-    const btn  = document.getElementById('refreshBtn');
-    icon.classList.add('fa-spin');
-    btn.disabled = true;
-
-    fetch(`/server_board/ajax/check_server.php?id=${serverId}`)
-        .then(r => r.json())
-        .then(d => {
-            icon.classList.remove('fa-spin');
-            btn.disabled = false;
-
-            // Update dot
-            const dot = document.getElementById('main-dot');
-            if (dot) dot.className = 'sdot ' + (d.status || 'checking');
-
-            // Update stat cards
-            const statStatus = document.getElementById('stat-status');
-            const statDetail = document.getElementById('stat-detail');
-            const statMs     = document.getElementById('stat-ms');
-            const statMsSub  = document.getElementById('stat-ms-sub');
-
-            if (statStatus) {
-                const labels = { online: '<span class="good">Online</span>', offline: '<span class="bad">Offline</span>', warning: '<span class="warn">Degraded</span>' };
-                statStatus.innerHTML = labels[d.status] ?? '<span style="color:#9ca3af">Unknown</span>';
-            }
-            if (statDetail) statDetail.textContent = d.detail ?? '';
-            if (statMs) {
-                statMs.innerHTML = d.ms != null
-                    ? d.ms + '<span style="font-size:.9rem;color:#6b7280">ms</span>'
-                    : '—';
-            }
-
-            // Update last checked label
-            const lbl = document.getElementById('last-checked-label');
-            if (lbl) lbl.textContent = 'Last checked: ' + new Date().toLocaleTimeString();
-
-            // Re-render bar + sparkline
-            if (d.history?.length) {
-                currentHistory = d.history;
-                renderBar(d.history);
-                renderSparkline(d.history);
-                updateTrend(d.history);
-                updateStreak(d.history);
-
-                const msList = d.history.filter(h => h.ms != null).map(h => +h.ms);
-                if (statMsSub && msList.length) {
-                    statMsSub.textContent = `avg ${Math.round(msList.reduce((a,b)=>a+b,0)/msList.length)}ms over last ${d.history.length} checks`;
-                }
-            }
-        })
-        .catch(() => {
-            icon.classList.remove('fa-spin');
-            btn.disabled = false;
-            const dot = document.getElementById('main-dot');
-            if (dot) dot.className = 'sdot offline';
-        });
-}
-
-// Auto-refresh every 30s
-runCheck();
-setInterval(runCheck, 30000);
 
 function openEditModal(s) {
     document.getElementById('editServerId').value    = s.server_id;
