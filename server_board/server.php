@@ -224,19 +224,19 @@ include __DIR__ . '/../includes/header.php';
         <div class="col-6 col-md-3">
             <div class="stat-card">
                 <div class="stat-label">30-Day Uptime</div>
-                <div class="stat-value <?= $uptime30d === null ? '' : ($uptime30d > 50 ? 'good' : 'bad') ?>">
+                <div id="stat-uptime" class="stat-value <?= $uptime30d === null ? '' : ($uptime30d > 50 ? 'good' : 'bad') ?>">
                     <?= $uptime30d !== null ? $uptime30d . '<span style="font-size:.9rem;color:inherit">%</span>' : '—' ?>
                 </div>
-                <div class="stat-sub"><?= $uRow['total'] ?> checks recorded</div>
+                <div id="stat-uptime-sub" class="stat-sub"><?= $uRow['total'] ?> checks recorded</div>
             </div>
         </div>
         <div class="col-6 col-md-3">
             <div class="stat-card">
                 <div class="stat-label">Total Incidents</div>
-                <div class="stat-value <?= count($incidents) > 0 ? 'bad' : 'good' ?>">
+                <div id="stat-incidents" class="stat-value <?= count($incidents) > 0 ? 'bad' : 'good' ?>">
                     <?= count($incidents) ?>
                 </div>
-                <div class="stat-sub">
+                <div id="stat-incidents-sub" class="stat-sub">
                     <?php
                     $open = array_filter($incidents, fn($i) => !$i['resolved_at']);
                     echo count($open) > 0 ? count($open) . ' currently open' : 'none active';
@@ -251,7 +251,7 @@ include __DIR__ . '/../includes/header.php';
         <div class="col-6 col-md-3">
             <div class="stat-card">
                 <div class="stat-label">Downtime (30d)</div>
-                <div class="stat-value <?= $totalDownSec > 0 ? 'bad' : 'good' ?>" style="font-size:1.2rem">
+                <div id="stat-downtime" class="stat-value <?= $totalDownSec > 0 ? 'bad' : 'good' ?>" style="font-size:1.2rem">
                     <?= $totalDownSec > 0 ? fmtDuration($totalDownSec) : 'None' ?>
                 </div>
                 <div class="stat-sub">across all incidents</div>
@@ -260,7 +260,7 @@ include __DIR__ . '/../includes/header.php';
         <div class="col-6 col-md-3">
             <div class="stat-card">
                 <div class="stat-label">Longest Outage</div>
-                <div class="stat-value <?= $longestOutageSec > 0 ? 'bad' : 'good' ?>" style="font-size:1.2rem">
+                <div id="stat-longest" class="stat-value <?= $longestOutageSec > 0 ? 'bad' : 'good' ?>" style="font-size:1.2rem">
                     <?= $longestOutageSec > 0 ? fmtDuration($longestOutageSec) : 'None' ?>
                 </div>
                 <div class="stat-sub">worst single incident</div>
@@ -467,6 +467,7 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <script>
+const serverId = <?= $id ?>;
 const tipEl = document.getElementById('tip');
 function showTip(e, text) { tipEl.textContent = text; tipEl.style.display = 'block'; moveTip(e); }
 function moveTip(e) {
@@ -631,6 +632,126 @@ function renderSparkline(history) {
 
     if (avg) avg.textContent = `avg ${mean}ms · min ${min}ms · max ${max}ms`;
 }
+
+function fmtDuration(sec) {
+    if (sec <= 0)    return 'None';
+    if (sec < 60)    return sec + 's';
+    if (sec < 3600)  return Math.floor(sec / 60) + 'm ' + (sec % 60) + 's';
+    return Math.floor(sec / 3600) + 'h ' + Math.floor((sec % 3600) / 60) + 'm';
+}
+
+function renderTimeline(buckets) {
+    const el = document.getElementById('timeline-24h');
+    if (!el) return;
+    let html = '';
+    for (let b = 23; b >= 0; b--) {
+        const bucket = buckets[b];
+        if (!bucket) {
+            html += '<span class="useg useg-empty"></span>';
+        } else {
+            const [on, tot] = bucket;
+            const pct = tot > 0 ? on / tot : 0;
+            const cls = pct >= 0.8 ? 'useg-ok' : (pct >= 0.5 ? 'useg-warn' : 'useg-err');
+            const d = new Date();
+            d.setHours(d.getHours() - b);
+            const hourLabel = d.toLocaleString('en-US', { hour: 'numeric', hour12: true });
+            const label = `${hourLabel} — ${Math.round(pct * 100)}% up · ${tot} check${tot !== 1 ? 's' : ''}`;
+            html += `<span class="useg ${cls}" data-tip="${label}"></span>`;
+        }
+    }
+    el.innerHTML = html;
+}
+
+function pollServerData() {
+    fetch(`/server_board/ajax/get_server_data.php?id=${serverId}`)
+        .then(r => r.json())
+        .then(d => {
+            // Status dot
+            const dot = document.getElementById('main-dot');
+            if (dot) dot.className = 'sdot ' + (d.status ?? 'checking');
+
+            // Current status card
+            const statStatus = document.getElementById('stat-status');
+            const statDetail = document.getElementById('stat-detail');
+            if (statStatus) {
+                const labels = { online: '<span class="good">Online</span>', offline: '<span class="bad">Offline</span>', warning: '<span class="warn">Degraded</span>' };
+                statStatus.innerHTML = labels[d.status] ?? '<span style="color:#9ca3af">Unknown</span>';
+            }
+            if (statDetail && d.checked_at) {
+                statDetail.textContent = new Date(d.checked_at.replace(' ', 'T') + 'Z')
+                    .toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+            }
+
+            // Response time card
+            const statMs    = document.getElementById('stat-ms');
+            const statMsSub = document.getElementById('stat-ms-sub');
+            if (statMs) {
+                statMs.innerHTML = d.ms != null
+                    ? d.ms + '<span style="font-size:.9rem;color:#6b7280">ms</span>'
+                    : '—';
+            }
+            if (statMsSub && d.history?.length) {
+                const vals = d.history.filter(h => h.ms != null).map(h => +h.ms);
+                if (vals.length) statMsSub.textContent = `avg ${Math.round(vals.reduce((a,b)=>a+b,0)/vals.length)}ms over last ${d.history.length} checks`;
+            }
+
+            // 30d uptime card
+            const upEl  = document.querySelector('.stat-card .stat-value[id="stat-uptime"]');
+            const upSub = document.querySelector('#stat-uptime-sub');
+            if (upEl) {
+                const pct = d.uptime_30d;
+                upEl.className = 'stat-value ' + (pct === null ? '' : pct > 50 ? 'good' : 'bad');
+                upEl.innerHTML = pct !== null ? pct + '<span style="font-size:.9rem;color:inherit">%</span>' : '—';
+            }
+            if (upSub) upSub.textContent = d.uptime_total + ' checks recorded';
+
+            // Incidents card
+            const incEl  = document.getElementById('stat-incidents');
+            const incSub = document.getElementById('stat-incidents-sub');
+            if (incEl) {
+                incEl.className = 'stat-value ' + (d.incident_total > 0 ? 'bad' : 'good');
+                incEl.textContent = d.incident_total;
+            }
+            if (incSub) incSub.textContent = d.incident_open > 0 ? d.incident_open + ' currently open' : 'none active';
+
+            // Downtime card
+            const dtEl  = document.getElementById('stat-downtime');
+            const dtSub = document.getElementById('stat-downtime-sub');
+            if (dtEl) {
+                dtEl.className = 'stat-value ' + (d.total_down_sec > 0 ? 'bad' : 'good');
+                dtEl.style.fontSize = '1.2rem';
+                dtEl.textContent = d.total_down_sec > 0 ? fmtDuration(d.total_down_sec) : 'None';
+            }
+
+            // Longest outage card
+            const loEl = document.getElementById('stat-longest');
+            if (loEl) {
+                loEl.className = 'stat-value ' + (d.longest_outage > 0 ? 'bad' : 'good');
+                loEl.style.fontSize = '1.2rem';
+                loEl.textContent = d.longest_outage > 0 ? fmtDuration(d.longest_outage) : 'None';
+            }
+
+            // Last checked label
+            const lbl = document.getElementById('last-checked-label');
+            if (lbl && d.checked_at) {
+                lbl.textContent = 'Last checked: ' + new Date(d.checked_at.replace(' ', 'T') + 'Z')
+                    .toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+            }
+
+            // Charts
+            if (d.history?.length) {
+                renderBar(d.history);
+                renderSparkline(d.history);
+                updateTrend(d.history);
+                updateStreak(d.history);
+            }
+
+            // 24h timeline
+            if (d.timeline) renderTimeline(d.timeline);
+        })
+        .catch(() => {});
+}
+setInterval(pollServerData, 60000);
 
 function openEditModal(s) {
     document.getElementById('editServerId').value    = s.server_id;

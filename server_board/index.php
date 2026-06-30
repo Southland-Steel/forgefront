@@ -115,8 +115,8 @@ include __DIR__ . '/../includes/header.php';
                         <tr class="srv-row" onclick="window.location='/server_board/server.php?id=<?= $sid ?>'">
                             <td class="ps-3">
                                 <div class="status-cell">
-                                    <span class="status-dot <?= $dotCls ?>"></span>
-                                    <span class="small"><?= $stLabel ?></span>
+                                    <span class="status-dot <?= $dotCls ?>" data-sid="<?= $sid ?>"></span>
+                                    <span class="small status-text" data-sid="<?= $sid ?>"><?= $stLabel ?></span>
                                 </div>
                             </td>
                             <td class="fw-semibold"><?= htmlspecialchars($s['name']) ?></td>
@@ -223,6 +223,32 @@ include __DIR__ . '/../includes/header.php';
 <script>
 let pendingDeleteId = null;
 const defaultPorts = { tcp: '', http: 80, https: 443, ping: '', dns: 53, mysql: 3306 };
+
+function pollStatus() {
+    fetch('/server_board/ajax/get_status.php')
+        .then(r => r.json())
+        .then(data => {
+            for (const [sid, d] of Object.entries(data)) {
+                const dot  = document.querySelector(`.status-dot[data-sid="${sid}"]`);
+                const text = document.querySelector(`.status-text[data-sid="${sid}"]`);
+                const uEl  = document.getElementById(`uptime-pct-${sid}`);
+
+                if (dot)  dot.className = 'status-dot ' + (d.status ?? 'checking');
+                if (text) {
+                    if (d.status === 'online')      text.innerHTML = 'Online' + (d.ms != null ? ` <span class="ms-badge">${d.ms}ms</span>` : '');
+                    else if (d.status === 'offline') text.innerHTML = '<span class="text-danger">Offline</span>';
+                    else if (d.status === 'warning') text.innerHTML = '<span class="text-warning">Degraded</span>';
+                }
+                if (uEl && d.uptime !== undefined) {
+                    const pct = d.uptime;
+                    uEl.textContent = pct !== null ? pct + '%' : '—';
+                    uEl.className   = 'small ' + (pct === null ? 'uptime-none' : pct >= 99 ? 'uptime-high' : pct >= 95 ? 'uptime-med' : 'uptime-low');
+                }
+            }
+        })
+        .catch(() => {});
+}
+setInterval(pollStatus, 60000);
 
 function onProtocolChange() {
     const proto = document.getElementById('serverProtocol').value;
