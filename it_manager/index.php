@@ -274,6 +274,9 @@ include __DIR__ . '/../includes/header.php';
                 </table>
                 </div>
             </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
         </div>
     </div>
 </div>
