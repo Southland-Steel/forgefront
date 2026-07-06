@@ -102,7 +102,7 @@ include __DIR__ . '/../includes/header.php';
 <!-- Location Assets Modal -->
 <div class="modal fade" id="locationAssetsModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content">
+        <div class="modal-content" style="overflow:hidden">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-location-dot me-2"></i><span id="locationAssetsTitle">Assets</span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>

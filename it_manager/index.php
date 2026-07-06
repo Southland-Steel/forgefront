@@ -252,7 +252,7 @@ include __DIR__ . '/../includes/header.php';
 <!-- Category Assets Modal -->
 <div class="modal fade" id="categoryAssetsModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content">
+        <div class="modal-content" style="overflow:hidden">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-tags me-2"></i><span id="categoryAssetsTitle">Assets</span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
