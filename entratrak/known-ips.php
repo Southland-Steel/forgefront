@@ -146,21 +146,13 @@ foreach ($rows as $r) {
 }
 arsort($providerCounts);
 arsort($categoryCounts);
+
+include __DIR__ . '/../includes/header.php';
+include __DIR__ . '/_nav.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Known IPs</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; padding: 30px; }
-        .container { max-width: none; margin: 0; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        h2 { color: #1e3d59; margin-bottom: 6px; } h3 { color: #1e3d59; }
-        .nav { margin-bottom: 20px; font-size: 0.9em; }
-        .nav a { color: #1e3d59; text-decoration: none; font-weight: 600; }
-        .nav a:hover { text-decoration: underline; }
-        .nav .sep { color: #ccd6dd; margin: 0 10px; }
-        .hint { color: #657786; font-size: 0.9em; }
+<style>
+        h3 { color: #1e3d59; }
+        .hint { color: #6c757d; font-size: 0.9em; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #e1e8ed; font-size: 0.9em; vertical-align: middle; }
         th { background-color: #1e3d59; color: white; }
@@ -194,23 +186,21 @@ arsort($categoryCounts);
         .rowform { display: flex; gap: 6px; align-items: center; }
         .who { color: #1e6fce; text-decoration: none; font-size: 0.8em; font-weight: 600; }
         .who:hover { text-decoration: underline; }
-        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; }
+        /* "et-" prefix avoids colliding with Bootstrap's own .modal classes */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1056; }
         .modal-overlay.open { display: flex; align-items: flex-start; justify-content: center; }
-        .modal { background: #fff; max-width: 640px; width: 92%; margin-top: 6vh; max-height: 84vh; overflow: auto; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 22px; border-bottom: 1px solid #e1e8ed; position: sticky; top: 0; background: #fff; }
-        .modal-header h3 { margin: 0; }
-        .modal-close { border: none; background: none; font-size: 1.5em; cursor: pointer; color: #657786; }
-        .modal-body { padding: 16px 22px; }
-    </style>
-</head>
-<body>
+        .et-modal { background: #fff; max-width: 640px; width: 92%; margin-top: 6vh; max-height: 84vh; overflow: auto; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); }
+        .et-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 22px; border-bottom: 1px solid #e1e8ed; position: sticky; top: 0; background: #fff; }
+        .et-modal-header h3 { margin: 0; }
+        .et-modal-close { border: none; background: none; font-size: 1.5em; cursor: pointer; color: #657786; }
+        .et-modal-body { padding: 16px 22px; }
+</style>
 
-<div class="container">
-    <div class="nav">
-        <a href="index.php">← Home</a><span class="sep">|</span><a href="entra.php">User License Grid</a><span class="sep">|</span><a href="signins.php">Sign-in Diagnostics</a>
+<div class="container-fluid px-4 pt-3">
+    <div class="page-header mb-3">
+        <h4 class="page-title">Known IPs</h4>
+        <p class="hint mb-0">Harvest source IPs seen in sign-in data, then mark each with a label and type. Only <strong>plant</strong>-type IPs drive the Legacy page's site rollup; the rest are just classified for reference.</p>
     </div>
-    <h2>Known IPs</h2>
-    <p class="hint">Harvest source IPs seen in sign-in data, then mark each with a label and type. Only <strong>plant</strong>-type IPs drive the Legacy page's site rollup; the rest are just classified for reference.</p>
 
     <?php if (isset($_GET['added'])): ?>
         <div class="banner ok">Harvest complete — logged <?php echo (int) $_GET['added']; ?> new source IP(s), all as type "other" for you to classify below.<?php echo !empty($_GET['capped']) ? ' (Covered the most-recent logins; run again later to catch more.)' : ''; ?></div>
@@ -290,7 +280,9 @@ arsort($categoryCounts);
         <button type="button" class="primary" onclick="applyBulk()">Apply to selected</button>
         <span class="hint" id="bulkCount">0 selected</span>
     </div>
-    <table>
+    <div class="card">
+    <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
         <thead><tr>
             <th><input type="checkbox" id="selAll" onclick="toggleAll(this)"></th>
             <th class="sortable" onclick="sortRows('ip')">IP</th>
@@ -350,6 +342,8 @@ arsort($categoryCounts);
             <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
+    </div>
 
     <h3>Add an IP manually</h3>
     <form method="post" class="bar">
@@ -367,12 +361,12 @@ arsort($categoryCounts);
 </div>
 
 <div class="modal-overlay" id="usersModal" onclick="if(event.target===this)this.classList.remove('open')">
-    <div class="modal">
-        <div class="modal-header">
+    <div class="et-modal">
+        <div class="et-modal-header">
             <h3 id="um-title">Who logged in</h3>
-            <button class="modal-close" onclick="document.getElementById('usersModal').classList.remove('open')">&times;</button>
+            <button class="et-modal-close" onclick="document.getElementById('usersModal').classList.remove('open')">&times;</button>
         </div>
-        <div class="modal-body" id="um-body">Loading…</div>
+        <div class="et-modal-body" id="um-body">Loading…</div>
     </div>
 </div>
 
@@ -577,5 +571,4 @@ filterKnown();
 updBulkCount();
 </script>
 
-</body>
-</html>
+<?php include __DIR__ . '/../includes/footer.php'; ?>

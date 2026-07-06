@@ -1,6 +1,15 @@
 <?php
 include 'entra-sync.php';
 
+/**
+ * The variables below are set by entra-sync.php's autorun block (included
+ * above) rather than declared in this file, which static analysis can't see
+ * across a runtime include — these hints just quiet IDE false positives.
+ * @var array $users
+ * @var array $licenseColumns
+ * @var int|null $dataAge
+ */
+
 // Optional server-side filter by license SKU (linked from skus.php).
 $skuFilter = $_GET['sku'] ?? '';
 $skuFilterName = '';
@@ -40,24 +49,36 @@ foreach ($users as $u) {
     if ($d !== '') $domainCounts[$d] = ($domainCounts[$d] ?? 0) + 1;
 }
 ksort($domainCounts);
+
+include __DIR__ . '/../includes/header.php';
+include __DIR__ . '/_nav.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Internal Identity Roster Matrix</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; padding: 30px; }
-        .container { max-width: none; margin: 0; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        h2 { color: #1e3d59; margin-bottom: 20px; border-bottom: 2px solid #f4f6f9; padding-bottom: 10px; }
+<style>
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { padding: 12px 15px; text-align: center; border-bottom: 1px solid #e1e8ed; }
-        th { background-color: #1e3d59; color: white; font-weight: 600; }
-        /* Keep the header row visible while scrolling the long user list */
+        /* !important needed: Bootstrap's .table > :not(caption) > * > * rule
+           (added when the table got table/table-sm/table-hover classes)
+           out-specifies a plain th selector for background-color. */
+        /* border: none removes the light grey cell borders (Bootstrap's
+           .table border rules) that were showing as gaps between the
+           narrow rotated license-column headers. */
+        /* Set on thead/tr too: rotated .rot cells can leave sub-pixel render
+           gaps at their edges, and without a matching background directly
+           behind them, the table's white background shows through as
+           thin gaps between the vertical license-column headers. */
+        thead, thead tr { background-color: #3d6da3 !important; }
+        th { background-color: #3d6da3 !important; color: white !important; font-weight: 600; border: none !important; }
+        /* Keep the header row visible while scrolling the long user list.
+           Requires the table NOT be wrapped in an overflow:auto container
+           (e.g. .table-responsive), which would break page-level sticky. */
         thead th { position: sticky; top: 0; z-index: 3; }
-        /* Vertical (bottom-to-top) headers so license columns stay narrow */
-        th.rot { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap;
-                 padding: 10px 6px; vertical-align: bottom; height: 140px; }
+        /* Vertical (bottom-to-top) headers so license columns stay narrow.
+           The rotation lives on an inner span, not the <th> itself — a <th>
+           that is both position:sticky AND transformed causes background
+           rendering gaps at the cell edges once it becomes "stuck" while
+           scrolling. Keeping the <th> untransformed avoids that conflict. */
+        th.rotcell { padding: 10px 6px; vertical-align: bottom; height: 140px; }
+        th.rotcell .rot { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; display: inline-block; }
         td.lic { padding: 12px 6px; }
         tr:nth-child(even) { background-color: #f8f9fa; }
         .text-left { text-align: left; }
@@ -66,14 +87,7 @@ ksort($domainCounts);
         .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 0.85em; font-weight: bold; }
         .active { background: #e8f8f5; color: #2e7d32; }
         .disabled { background: #fce4d6; color: #c0392b; }
-        .error-banner { background: #fdecea; color: #c0392b; padding: 12px 15px; border-radius: 6px; margin-bottom: 15px; font-weight: 600; }
-        .warn-banner { background: #fff4e0; color: #8a5a00; padding: 12px 15px; border-radius: 6px; margin-bottom: 15px; font-weight: 600; }
         .filter-note { background: #eef3f8; color: #1e3d59; padding: 10px 15px; border-radius: 6px; margin-bottom: 15px; }
-        .nav { margin-bottom: 20px; font-size: 0.9em; }
-        .nav a { color: #1e3d59; text-decoration: none; font-weight: 600; }
-        .nav a:hover { text-decoration: underline; }
-        .nav .sep { color: #ccd6dd; margin: 0 10px; }
-        .nav .age { color: #657786; font-weight: 400; }
         .roles { font-family: ui-monospace, monospace; font-size: 0.8em; text-align: left; max-width: 260px; overflow-wrap: anywhere; color: #555; }
         .upn { display: block; color: #657786; font-weight: 400; font-size: 0.82em; margin-top: 2px; }
         .flag-badge { display: inline-block; margin-left: 8px; background: #fce4d6; color: #c0392b; border-radius: 12px; padding: 2px 8px; font-size: 0.72em; font-weight: 700; text-decoration: none; vertical-align: middle; white-space: nowrap; }
@@ -81,14 +95,14 @@ ksort($domainCounts);
         .admin-badge { display: inline-block; margin-left: 8px; background: #4a148c; color: #fff; border-radius: 12px; padding: 2px 8px; font-size: 0.72em; font-weight: 700; vertical-align: middle; }
         tbody tr { cursor: pointer; }
         tbody tr:hover { background: #eef3f8; }
-        /* Detail modal */
-        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; }
+        /* Detail modal — "et-" prefix avoids colliding with Bootstrap's own .modal classes */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1056; }
         .modal-overlay.open { display: flex; align-items: flex-start; justify-content: center; }
-        .modal { background: #fff; max-width: 760px; width: 92%; margin-top: 5vh; max-height: 88vh; overflow: auto; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid #e1e8ed; position: sticky; top: 0; background: #fff; }
-        .modal-header h3 { margin: 0; color: #1e3d59; }
-        .modal-close { border: none; background: none; font-size: 1.6em; line-height: 1; cursor: pointer; color: #657786; }
-        .modal-body { padding: 20px 24px; }
+        .et-modal { background: #fff; max-width: 760px; width: 92%; margin-top: 5vh; max-height: 88vh; overflow: auto; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); }
+        .et-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid #e1e8ed; position: sticky; top: 0; background: #fff; }
+        .et-modal-header h3 { margin: 0; color: #1e3d59; }
+        .et-modal-close { border: none; background: none; font-size: 1.6em; line-height: 1; cursor: pointer; color: #657786; }
+        .et-modal-body { padding: 20px 24px; }
         .detail-grid { display: grid; grid-template-columns: 170px 1fr; gap: 8px 16px; margin-bottom: 10px; }
         .detail-grid dt { color: #657786; font-weight: 600; }
         .detail-grid dd { margin: 0; word-break: break-word; }
@@ -114,29 +128,28 @@ ksort($domainCounts);
         .toggle-btn.active { background: #c0392b; border-color: #c0392b; color: #fff; }
         .toggle-btn.ghost { color: #657786; }
         th.sortable { cursor: pointer; user-select: none; }
-        th.sortable:hover { background: #274d6e; }
+        th.sortable:hover { background: #1e3d59 !important; }
         th .arrow { font-size: 0.8em; opacity: 0.9; }
     </style>
-</head>
-<body>
 
-<div class="container">
-    <div class="nav">
-        <a href="index.php">← Home</a><span class="sep">|</span><a href="skus.php">Tenant License SKUs</a><span class="sep">|</span>
-        <?php if (!empty($dataAge) || $dataAge === 0): ?>
-            <span class="age">Data cached <?php echo htmlspecialchars(humanAge($dataAge)); ?> ago</span><span class="sep">|</span>
-        <?php endif; ?>
-        <a href="?refresh=1">↻ Refresh</a>
+<div class="container-fluid px-4 pt-3">
+    <div class="page-header d-flex justify-content-between align-items-center mb-3">
+        <h4 class="page-title">User License &amp; Mail Property Grid</h4>
+        <div class="d-flex align-items-center gap-2">
+            <?php if (!empty($dataAge) || $dataAge === 0): ?>
+                <span class="text-muted small">Data cached <?php echo htmlspecialchars(humanAge($dataAge)); ?> ago</span>
+            <?php endif; ?>
+            <a href="?refresh=1" class="btn btn-sm btn-outline-secondary">↻ Refresh</a>
+        </div>
     </div>
-    <h2>System Administration: User License & Mail Property Grid</h2>
     <?php if (!empty($syncError)): ?>
-        <div class="error-banner">Entra sync failed: <?php echo htmlspecialchars($syncError); ?></div>
+        <div class="alert alert-danger">Entra sync failed: <?php echo htmlspecialchars($syncError); ?></div>
     <?php endif; ?>
     <?php if (!empty($signinWarning)): ?>
-        <div class="warn-banner"><?php echo htmlspecialchars($signinWarning); ?></div>
+        <div class="alert alert-warning"><?php echo htmlspecialchars($signinWarning); ?></div>
     <?php endif; ?>
     <?php if ($skuFilter !== ''): ?>
-        <div class="filter-note">
+        <div class="alert alert-info">
             Showing <strong><?php echo count($users); ?></strong> users assigned
             <strong><?php echo htmlspecialchars($skuFilterName); ?></strong>
             · <a class="deep" href="usage.php?sku=<?php echo urlencode($skuFilter); ?>">check utilization →</a>
@@ -174,10 +187,11 @@ ksort($domainCounts);
         <button type="button" class="toggle-btn ghost" onclick="resetFilters()">Reset</button>
         <span class="filter-count" id="filterCount"></span>
     </div>
-    <table>
+    <div class="card">
+    <table class="table table-sm table-hover mb-0">
         <thead>
             <tr>
-                <th class="text-left sortable" onclick="sortTable(this)">User</th>
+                <th class="text-left sortable ps-3" onclick="sortTable(this)">User</th>
                 <th class="sortable" onclick="sortTable(this)">Status</th>
                 <th class="sortable" onclick="sortTable(this)">Type</th>
                 <th class="sortable" onclick="sortTable(this)">Has 'mail' Property</th>
@@ -185,7 +199,7 @@ ksort($domainCounts);
                     <th class="sortable" onclick="sortTable(this)" title="Last confirmed successful login (not attempts)">Last Successful Sign-in</th>
                 <?php endif; ?>
                 <?php foreach ($licenseColumns as $guid => $name): ?>
-                    <th class="rot sortable" onclick="sortTable(this)"><?php echo htmlspecialchars($name); ?></th>
+                    <th class="rotcell sortable" onclick="sortTable(this)"><span class="rot"><?php echo htmlspecialchars($name); ?></span></th>
                 <?php endforeach; ?>
             </tr>
         </thead>
@@ -262,16 +276,17 @@ ksort($domainCounts);
             <?php endforeach; ?>
         </tbody>
     </table>
+    </div>
 </div>
 
 <!-- Detail modal -->
 <div class="modal-overlay" id="userModal" onclick="if(event.target===this)closeUser()">
-    <div class="modal" role="dialog" aria-modal="true">
-        <div class="modal-header">
+    <div class="et-modal" role="dialog" aria-modal="true">
+        <div class="et-modal-header">
             <h3 id="m-title">User</h3>
-            <button class="modal-close" onclick="closeUser()" aria-label="Close">&times;</button>
+            <button class="et-modal-close" onclick="closeUser()" aria-label="Close">&times;</button>
         </div>
-        <div class="modal-body">
+        <div class="et-modal-body">
             <dl class="detail-grid" id="m-details"></dl>
 
             <div class="section-title">Sign-in Activity</div>
@@ -523,5 +538,4 @@ function sortTable(th) {
 }
 </script>
 
-</body>
-</html>
+<?php include __DIR__ . '/../includes/footer.php'; ?>

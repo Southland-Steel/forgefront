@@ -100,21 +100,12 @@ try {
 
 $underAttack = count(array_filter($rows ?? [], fn($r) => $r['attack']));
 $adminsUnderAttack = count(array_filter($rows ?? [], fn($r) => $r['attack'] && !empty($r['roles'])));
+
+include __DIR__ . '/../includes/header.php';
+include __DIR__ . '/_nav.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Attack Surveillance</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; padding: 30px; }
-        .container { max-width: none; margin: 0; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        h2 { color: #1e3d59; margin-bottom: 6px; }
-        .nav { margin-bottom: 20px; font-size: 0.9em; }
-        .nav a { color: #1e3d59; text-decoration: none; font-weight: 600; }
-        .nav a:hover { text-decoration: underline; }
-        .nav .sep { color: #ccd6dd; margin: 0 10px; }
-        .hint { color: #657786; font-size: 0.9em; }
+<style>
+        .hint { color: #6c757d; font-size: 0.9em; }
         .bar { margin: 12px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
         .filter { padding: 9px 12px; border: 1px solid #ccd6dd; border-radius: 6px; font-size: 0.95em; min-width: 260px; }
         .filter:focus { outline: none; border-color: #1e3d59; }
@@ -145,34 +136,29 @@ $adminsUnderAttack = count(array_filter($rows ?? [], fn($r) => $r['attack'] && !
         .badge.legacy { background: #fce4d6; color: #c0392b; }
         .badge.exposed { background: #c0392b; color: #fff; }
         .badge.dis { background: #eef3f8; color: #657786; }
-        .error-banner { background: #fdecea; color: #c0392b; padding: 12px 15px; border-radius: 6px; margin-bottom: 15px; font-weight: 600; }
-        .warn-banner { background: #fff4e0; color: #8a5a00; padding: 12px 15px; border-radius: 6px; margin-bottom: 15px; font-weight: 600; }
         a.deep { color: #1e6fce; text-decoration: none; font-weight: 600; }
         a.deep:hover { text-decoration: underline; }
-    </style>
-</head>
-<body>
+</style>
 
-<div class="container">
-    <div class="nav">
-        <a href="index.php">← Home</a><span class="sep">|</span><a href="entra.php">User License Grid</a><span class="sep">|</span><a href="legacy.php">Legacy Auth</a>
+<div class="container-fluid px-4 pt-3">
+    <div class="page-header mb-3">
+        <h4 class="page-title">Attack Surveillance</h4>
+        <p class="hint mb-0">Users ranked by recent failed sign-ins. Many distinct IPs = distributed spray; one or two IPs usually means a broken client, not an attack.
+            <?php if ($capped): ?><strong>Note:</strong> based on the most recent <?php echo number_format($totalFailures); ?> failure events (there were more — counts are a floor).<?php else: ?>Based on <?php echo number_format($totalFailures); ?> failure events in the retained window.<?php endif; ?></p>
     </div>
-    <h2>Attack Surveillance</h2>
-    <p class="hint">Users ranked by recent failed sign-ins. Many distinct IPs = distributed spray; one or two IPs usually means a broken client, not an attack.
-        <?php if ($capped): ?><strong>Note:</strong> based on the most recent <?php echo number_format($totalFailures); ?> failure events (there were more — counts are a floor).<?php else: ?>Based on <?php echo number_format($totalFailures); ?> failure events in the retained window.<?php endif; ?></p>
 
     <div class="bar">
-        <input type="text" id="userFilter" class="filter" placeholder="Search name or UPN…" oninput="filterRows()" autocomplete="off">
+        <input type="text" id="userFilter" class="form-control" style="max-width:280px" placeholder="Search name or UPN…" oninput="filterRows()" autocomplete="off">
         <button type="button" class="toggle-btn" id="attackToggle" onclick="toggleAttacks()">🎯 Active attacks only</button>
         <span class="filter-count" id="filterCount"></span>
         <a class="deep" href="?refresh=1">↻ Refresh</a>
     </div>
 
     <?php if ($syncError): ?>
-        <div class="error-banner">Failed: <?php echo htmlspecialchars($syncError); ?></div>
+        <div class="alert alert-danger">Failed: <?php echo htmlspecialchars($syncError); ?></div>
     <?php endif; ?>
     <?php if ($adminError): ?>
-        <div class="warn-banner"><?php echo htmlspecialchars($adminError); ?></div>
+        <div class="alert alert-warning"><?php echo htmlspecialchars($adminError); ?></div>
     <?php endif; ?>
 
     <?php if (!$syncError): ?>
@@ -183,8 +169,9 @@ $adminsUnderAttack = count(array_filter($rows ?? [], fn($r) => $r['attack'] && !
             <div class="stat"><div class="n"><?php echo number_format($totalFailures); ?></div><div class="l">Failures analyzed</div></div>
         </div>
 
-        <div style="overflow-x:auto">
-        <table id="atkTable">
+        <div class="card">
+        <div class="table-responsive">
+        <table id="atkTable" class="table table-sm table-hover mb-0">
             <thead>
                 <tr>
                     <th class="sortable" onclick="sortTable(this)">User</th>
@@ -227,6 +214,7 @@ $adminsUnderAttack = count(array_filter($rows ?? [], fn($r) => $r['attack'] && !
                 <?php endforeach; ?>
             </tbody>
         </table>
+        </div>
         </div>
         <p class="hint">"Recent Success = verify" means this account had a successful sign-in in the last <?php echo EXPOSED_DAYS; ?> days while under attack — expected for active users, but worth confirming it was legitimate for anyone heavily targeted. True compromise scoring needs Entra ID Protection (P2).</p>
     <?php endif; ?>
@@ -274,5 +262,4 @@ function sortTable(th) {
 filterRows();
 </script>
 
-</body>
-</html>
+<?php include __DIR__ . '/../includes/footer.php'; ?>

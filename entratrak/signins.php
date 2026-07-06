@@ -93,28 +93,19 @@ if (!$succEvents) {
 } else {
     $verdictCls = 'ok'; $verdictTxt = 'Single country, no legacy successes — pattern looks normal. Many IPs alone (e.g. a phone on cellular) is not a compromise signal.';
 }
+
+include __DIR__ . '/../includes/header.php';
+include __DIR__ . '/_nav.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Sign-in Diagnostics</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; padding: 30px; }
-        .container { max-width: none; margin: 0; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        h2 { color: #1e3d59; margin-bottom: 6px; }
-        .nav { margin-bottom: 20px; font-size: 0.9em; }
-        .nav a { color: #1e3d59; text-decoration: none; font-weight: 600; }
-        .nav a:hover { text-decoration: underline; }
-        .nav .sep { color: #ccd6dd; margin: 0 10px; }
+<style>
         .search { margin: 12px 0 20px; }
         .search input { padding: 9px 12px; border: 1px solid #ccd6dd; border-radius: 6px; font-size: 0.95em; width: 360px; }
         .search button { padding: 9px 16px; border: none; background: #1e3d59; color: #fff; border-radius: 6px; font-weight: 600; cursor: pointer; margin-left: 8px; }
-        .error-banner { background: #fdecea; color: #c0392b; padding: 12px 15px; border-radius: 6px; margin-bottom: 15px; font-weight: 600; }
-        .card { border: 1px solid #e1e8ed; border-radius: 8px; padding: 18px 20px; margin-bottom: 24px; }
-        .card.fail { border-color: #f0b4a8; background: #fdf4f2; }
-        .card.ok { border-color: #b7e4cf; background: #f2faf6; }
-        .card h3 { margin: 0 0 12px; color: #1e3d59; }
+        /* "et-" prefix avoids colliding with Bootstrap's own .card classes */
+        .et-card { border: 1px solid #e1e8ed; border-radius: 8px; padding: 18px 20px; margin-bottom: 24px; }
+        .et-card.fail { border-color: #f0b4a8; background: #fdf4f2; }
+        .et-card.ok { border-color: #b7e4cf; background: #f2faf6; }
+        .et-card h3 { margin: 0 0 12px; color: #1e3d59; }
         .kv { display: grid; grid-template-columns: 160px 1fr; gap: 6px 16px; }
         .kv dt { color: #657786; font-weight: 600; }
         .kv dd { margin: 0; word-break: break-word; }
@@ -132,24 +123,17 @@ if (!$succEvents) {
         .sum-metrics .m { font-size: 0.9em; color: #657786; }
         .sum-metrics .m b { display: block; font-size: 1.4em; color: #1e3d59; font-weight: 700; }
         .sum-verdict { font-weight: 600; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e1e8ed; font-size: 0.9em; }
-        th { background-color: #1e3d59; color: white; }
-        tr:nth-child(even) { background-color: #f8f9fa; }
         a.deep { color: #1e6fce; text-decoration: none; font-weight: 600; }
         a.deep:hover { text-decoration: underline; }
         .mono { font-family: ui-monospace, monospace; font-size: 0.85em; }
-        .hint { color: #657786; font-size: 0.9em; }
-    </style>
-</head>
-<body>
+        .hint { color: #6c757d; font-size: 0.9em; }
+</style>
 
-<div class="container">
-    <div class="nav">
-        <a href="index.php">← Home</a><span class="sep">|</span><a href="entra.php">User License Grid</a>
+<div class="container-fluid px-4 pt-3">
+    <div class="page-header mb-2">
+        <h4 class="page-title">Sign-in Diagnostics</h4>
+        <p class="hint mb-0">Recent sign-in log entries from Entra (auditLogs/signIns). Includes failed and non-interactive attempts.</p>
     </div>
-    <h2>Sign-in Diagnostics</h2>
-    <p class="hint">Recent sign-in log entries from Entra (auditLogs/signIns). Includes failed and non-interactive attempts.</p>
 
     <form class="search" method="get">
         <input type="text" name="user" value="<?php echo htmlspecialchars($upn); ?>" placeholder="user@domain.com" autocomplete="off">
@@ -160,7 +144,7 @@ if (!$succEvents) {
     </form>
 
     <?php if ($syncError): ?>
-        <div class="error-banner">Sign-in query failed: <?php echo htmlspecialchars($syncError); ?></div>
+        <div class="alert alert-danger">Sign-in query failed: <?php echo htmlspecialchars($syncError); ?></div>
     <?php endif; ?>
 
     <?php if ($upn !== '' && !$syncError): ?>
@@ -193,12 +177,13 @@ if (!$succEvents) {
             </div>
 
             <?php if ($succIpDetail): ?>
-                <div class="card">
+                <div class="et-card">
                     <h3 style="margin-top:0;color:#1e3d59">Successful Source IPs</h3>
                     <?php if (!$dbUp): ?>
                         <p class="hint">Known-IP store unavailable — showing config sites only. (Set DB_SQLITE_PATH in .env to save known IPs.)</p>
                     <?php endif; ?>
-                    <table>
+                    <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
                         <thead><tr><th>IP</th><th>Logins</th><th>Location</th><th>Legacy</th><th>Known?</th><th></th></tr></thead>
                         <tbody>
                             <?php foreach ($succIpDetail as $ip => $d):
@@ -238,18 +223,19 @@ if (!$succEvents) {
                             <?php endforeach; ?>
                         </tbody>
                     </table>
+                    </div>
                 </div>
             <?php endif; ?>
         <?php endif; ?>
 
         <?php if (!$last): ?>
-            <div class="card"><em>No sign-in log entries found for this user in the retained window (typically 30 days).</em></div>
+            <div class="et-card"><em>No sign-in log entries found for this user in the retained window (typically 30 days).</em></div>
         <?php else:
             $ok = isSuccess($last);
             $code = (int) ($last['status']['errorCode'] ?? 0);
             $reason = $last['status']['failureReason'] ?? '';
         ?>
-            <div class="card <?php echo $ok ? 'ok' : 'fail'; ?>">
+            <div class="et-card <?php echo $ok ? 'ok' : 'fail'; ?>">
                 <h3>Most Recent Attempt
                     <span class="pill <?php echo $ok ? 'ok' : 'fail'; ?>"><?php echo $ok ? 'Success' : 'Failed'; ?></span>
                 </h3>
@@ -277,7 +263,9 @@ if (!$succEvents) {
             </div>
 
             <h3 style="color:#1e3d59">Recent Sign-ins (<?php echo count($signIns); ?>)</h3>
-            <table>
+            <div class="card">
+            <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
                 <thead>
                     <tr>
                         <th>When</th><th>Result</th><th>Type</th><th>IP</th>
@@ -308,9 +296,10 @@ if (!$succEvents) {
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            </div>
+            </div>
         <?php endif; ?>
     <?php endif; ?>
 </div>
 
-</body>
-</html>
+<?php include __DIR__ . '/../includes/footer.php'; ?>

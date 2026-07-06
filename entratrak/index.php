@@ -12,67 +12,81 @@ try {
     $connected = false;
     $connError = $e->getMessage();
 }
+
+include __DIR__ . '/../includes/header.php';
+include __DIR__ . '/_nav.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Entra Manager</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; padding: 30px; }
-        .container { max-width: none; margin: 0; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        h1 { color: #1e3d59; margin-bottom: 6px; }
-        p.sub { color: #657786; margin-top: 0; margin-bottom: 24px; }
-        .status { display: inline-block; padding: 6px 12px; border-radius: 12px; font-size: 0.9em; font-weight: bold; margin-bottom: 24px; }
-        .ok { background: #e8f8f5; color: #2e7d32; }
-        .bad { background: #fce4d6; color: #c0392b; }
-        .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .card { display: block; text-decoration: none; color: inherit; border: 1px solid #e1e8ed; border-radius: 8px; padding: 20px; transition: box-shadow 0.15s, border-color 0.15s; }
-        .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-color: #1e3d59; }
-        .card h3 { color: #1e3d59; margin: 0 0 8px; }
-        .card p { color: #657786; margin: 0; font-size: 0.9em; }
-    </style>
-</head>
-<body>
+<style>
+    .entratrak-card { display: block; text-decoration: none; color: inherit; height: 100%; border: 2px solid transparent; transition: all 0.3s ease; }
+    .entratrak-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(190,24,93,.25); border-color: #be185d; }
+    .entratrak-card .card-title { color: #1f2937; }
+    .entratrak-card .card-text { color: #6c757d; font-size: 0.9rem; }
+</style>
 
-<div class="container">
-    <h1>Entra Manager</h1>
-    <p class="sub">Internal identity, license, and role tools</p>
-
-    <?php if ($connected): ?>
-        <div class="status ok">● Connected to Entra</div>
-    <?php else: ?>
-        <div class="status bad">● Not connected — <?php echo htmlspecialchars($connError); ?></div>
-    <?php endif; ?>
-
-    <div class="cards">
-        <a class="card" href="entra.php">
-            <h3>User License &amp; Role Grid</h3>
-            <p>All users with their license assignments, mail property, and SSO app roles.</p>
-        </a>
-        <a class="card" href="skus.php">
-            <h3>Tenant License SKUs</h3>
-            <p>Every subscribed SKU with GUIDs for the ignore list and grid display names.</p>
-        </a>
-        <a class="card" href="usage.php">
-            <h3>License Utilization</h3>
-            <p>Who's actually using an assigned license, based on M365 activity — spot reclaim candidates.</p>
-        </a>
-        <a class="card" href="attacks.php">
-            <h3>Attack Surveillance</h3>
-            <p>Users ranked by failed sign-ins — spot who's being sprayed, legacy-auth exposure, and admins under attack.</p>
-        </a>
-        <a class="card" href="legacy.php">
-            <h3>Legacy Authentication</h3>
-            <p>Accounts using MFA-bypassing legacy protocols — separates real dependencies from attack noise.</p>
-        </a>
-        <a class="card" href="known-ips.php">
-            <h3>Known IPs</h3>
-            <p>Manage trusted source IPs and scan sign-ins to prepopulate shared office/site addresses.</p>
-        </a>
+<div class="container-fluid px-4 pt-3">
+    <div class="page-header d-flex justify-content-between align-items-center mb-3">
+        <h4 class="page-title">
+            <i class="fas fa-user-shield me-2" style="background:linear-gradient(to bottom,#f472b6,#be185d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;"></i>
+            Entratrak
+        </h4>
+        <?php if ($connected): ?>
+            <span class="badge bg-success px-3 py-2">● Connected to Entra</span>
+        <?php else: ?>
+            <span class="badge bg-danger px-3 py-2">● Not connected — <?= htmlspecialchars($connError) ?></span>
+        <?php endif; ?>
     </div>
-    <p class="sub" style="margin-top:20px">Per-user sign-in diagnostics (IP, location, failure reason) open from any user's row in the grid.</p>
+
+    <div class="row g-3">
+        <div class="col-12 col-md-6 col-lg-4">
+            <a class="card entratrak-card" href="entra.php">
+                <div class="card-body">
+                    <h3 class="card-title h5">User License &amp; Role Grid</h3>
+                    <p class="card-text">All users with their license assignments, mail property, and SSO app roles.</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-12 col-md-6 col-lg-4">
+            <a class="card entratrak-card" href="skus.php">
+                <div class="card-body">
+                    <h3 class="card-title h5">Tenant License SKUs</h3>
+                    <p class="card-text">Every subscribed SKU with GUIDs for the ignore list and grid display names.</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-12 col-md-6 col-lg-4">
+            <a class="card entratrak-card" href="usage.php">
+                <div class="card-body">
+                    <h3 class="card-title h5">License Utilization</h3>
+                    <p class="card-text">Who's actually using an assigned license, based on M365 activity — spot reclaim candidates.</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-12 col-md-6 col-lg-4">
+            <a class="card entratrak-card" href="attacks.php">
+                <div class="card-body">
+                    <h3 class="card-title h5">Attack Surveillance</h3>
+                    <p class="card-text">Users ranked by failed sign-ins — spot who's being sprayed, legacy-auth exposure, and admins under attack.</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-12 col-md-6 col-lg-4">
+            <a class="card entratrak-card" href="legacy.php">
+                <div class="card-body">
+                    <h3 class="card-title h5">Legacy Authentication</h3>
+                    <p class="card-text">Accounts using MFA-bypassing legacy protocols — separates real dependencies from attack noise.</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-12 col-md-6 col-lg-4">
+            <a class="card entratrak-card" href="known-ips.php">
+                <div class="card-body">
+                    <h3 class="card-title h5">Known IPs</h3>
+                    <p class="card-text">Manage trusted source IPs and scan sign-ins to prepopulate shared office/site addresses.</p>
+                </div>
+            </a>
+        </div>
+    </div>
+    <p class="text-muted mt-3">Per-user sign-in diagnostics (IP, location, failure reason) open from any user's row in the grid.</p>
 </div>
 
-</body>
-</html>
+<?php include __DIR__ . '/../includes/footer.php'; ?>

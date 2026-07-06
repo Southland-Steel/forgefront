@@ -93,21 +93,12 @@ try {
 
 $dependencies = count(array_filter($rows, fn($r) => $r['dependency']));
 $attackOnly   = count($rows) - $dependencies;
+
+include __DIR__ . '/../includes/header.php';
+include __DIR__ . '/_nav.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Legacy Authentication</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; padding: 30px; }
-        .container { max-width: none; margin: 0; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        h2 { color: #1e3d59; margin-bottom: 6px; }
-        .nav { margin-bottom: 20px; font-size: 0.9em; }
-        .nav a { color: #1e3d59; text-decoration: none; font-weight: 600; }
-        .nav a:hover { text-decoration: underline; }
-        .nav .sep { color: #ccd6dd; margin: 0 10px; }
-        .hint { color: #657786; font-size: 0.9em; }
+<style>
+        .hint { color: #6c757d; font-size: 0.9em; }
         .bar { margin: 12px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
         .filter { padding: 9px 12px; border: 1px solid #ccd6dd; border-radius: 6px; font-size: 0.95em; min-width: 260px; }
         .filter:focus { outline: none; border-color: #1e3d59; }
@@ -133,7 +124,6 @@ $attackOnly   = count($rows) - $dependencies;
         .pill.dep { background: #fff4e0; color: #8a5a00; }
         .pill.atk { background: #eef3f8; color: #34506b; }
         .badge.dis { background: #eef3f8; color: #657786; padding: 3px 8px; border-radius: 12px; font-size: 0.78em; font-weight: bold; }
-        .error-banner { background: #fdecea; color: #c0392b; padding: 12px 15px; border-radius: 6px; margin-bottom: 15px; font-weight: 600; }
         a.deep { color: #1e6fce; text-decoration: none; font-weight: 600; }
         a.deep:hover { text-decoration: underline; }
         .mono { font-family: ui-monospace, monospace; font-size: 0.88em; }
@@ -143,27 +133,24 @@ $attackOnly   = count($rows) - $dependencies;
         .ipchip:hover { background: #8a5a00; color: #fff; }
         .ipchip.clear { font-family: inherit; color: #657786; border-color: #ccd6dd; }
         .shared-badge { display: inline-block; background: #fce4d6; color: #c0392b; border-radius: 10px; padding: 1px 7px; font-size: 0.72em; font-weight: 700; margin-left: 4px; }
-    </style>
-</head>
-<body>
+</style>
 
-<div class="container">
-    <div class="nav">
-        <a href="index.php">← Home</a><span class="sep">|</span><a href="entra.php">User License Grid</a><span class="sep">|</span><a href="attacks.php">Attack Surveillance</a>
+<div class="container-fluid px-4 pt-3">
+    <div class="page-header mb-3">
+        <h4 class="page-title">Legacy Authentication</h4>
+        <p class="hint mb-0">Accounts seen using legacy protocols (SMTP, IMAP, POP…) that bypass MFA. <strong>Successful</strong> legacy sign-ins are real dependencies — remediate these before blocking legacy auth. Failure-only accounts are just attackers (safe to block).
+            <?php if ($capped): ?> Based on the most recent <?php echo number_format($totalEvents); ?> events (capped).<?php else: ?> Based on <?php echo number_format($totalEvents); ?> events in the retained window.<?php endif; ?></p>
     </div>
-    <h2>Legacy Authentication</h2>
-    <p class="hint">Accounts seen using legacy protocols (SMTP, IMAP, POP…) that bypass MFA. <strong>Successful</strong> legacy sign-ins are real dependencies — remediate these before blocking legacy auth. Failure-only accounts are just attackers (safe to block).
-        <?php if ($capped): ?> Based on the most recent <?php echo number_format($totalEvents); ?> events (capped).<?php else: ?> Based on <?php echo number_format($totalEvents); ?> events in the retained window.<?php endif; ?></p>
 
     <div class="bar">
-        <input type="text" id="userFilter" class="filter" placeholder="Search name or UPN…" oninput="filterRows()" autocomplete="off">
+        <input type="text" id="userFilter" class="form-control" style="max-width:280px" placeholder="Search name or UPN…" oninput="filterRows()" autocomplete="off">
         <button type="button" class="toggle-btn" id="depToggle" onclick="toggleDeps()">⚠ Dependencies only</button>
         <span class="filter-count" id="filterCount"></span>
         <a class="deep" href="?refresh=1">↻ Refresh</a>
     </div>
 
     <?php if ($syncError): ?>
-        <div class="error-banner">Failed: <?php echo htmlspecialchars($syncError); ?></div>
+        <div class="alert alert-danger">Failed: <?php echo htmlspecialchars($syncError); ?></div>
     <?php endif; ?>
 
     <?php if (!$syncError): ?>
@@ -185,8 +172,9 @@ $attackOnly   = count($rows) - $dependencies;
             </div>
         <?php endif; ?>
 
-        <div style="overflow-x:auto">
-        <table id="legTable">
+        <div class="card">
+        <div class="table-responsive">
+        <table id="legTable" class="table table-sm table-hover mb-0">
             <thead>
                 <tr>
                     <th class="sortable" onclick="sortTable(this)">User</th>
@@ -241,6 +229,7 @@ $attackOnly   = count($rows) - $dependencies;
             </tbody>
         </table>
         </div>
+        </div>
         <p class="hint">Remediation for a dependency: move the client to modern auth (OAuth), or if it's an app/device that can't, isolate it — don't leave tenant-wide legacy auth on for everyone because of a few. Blocking is done via a Conditional Access policy targeting legacy authentication clients.</p>
     <?php endif; ?>
 </div>
@@ -294,5 +283,4 @@ function sortTable(th) {
 filterRows();
 </script>
 
-</body>
-</html>
+<?php include __DIR__ . '/../includes/footer.php'; ?>
