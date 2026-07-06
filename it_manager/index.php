@@ -144,12 +144,12 @@ include __DIR__ . '/../includes/header.php';
                     <table class="table table-sm table-hover mb-0">
                         <tbody>
                         <?php foreach ($byCategory as $row): ?>
-                        <tr>
+                        <tr style="cursor:pointer" onclick="showCategoryAssets(<?= $row['category_id'] ?>, '<?= htmlspecialchars($row['name'], ENT_QUOTES) ?>')">
                             <td class="ps-3"><?= htmlspecialchars($row['name']) ?></td>
                             <td class="fw-semibold text-center"><?= $row['cnt'] ?></td>
                             <td class="pe-2 text-end">
                                 <button class="btn btn-sm btn-outline-danger py-0 px-2"
-                                    onclick="confirmDeleteCategory(<?= $row['category_id'] ?>, '<?= htmlspecialchars($row['name'], ENT_QUOTES) ?>', <?= $row['cnt'] ?>)">
+                                    onclick="event.stopPropagation(); confirmDeleteCategory(<?= $row['category_id'] ?>, '<?= htmlspecialchars($row['name'], ENT_QUOTES) ?>', <?= $row['cnt'] ?>)">
                                     <i class="fas fa-xmark"></i>
                                 </button>
                             </td>
@@ -249,7 +249,73 @@ include __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
+<!-- Category Assets Modal -->
+<div class="modal fade" id="categoryAssetsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-tags me-2"></i><span id="categoryAssetsTitle">Assets</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="categoryAssetsLoading" class="text-muted text-center py-4">Loading…</div>
+                <p id="categoryAssetsEmpty" class="text-muted text-center py-4 mb-0" style="display:none">No assets in this category.</p>
+                <div class="table-responsive" style="max-height:60vh">
+                <table class="table table-sm table-hover mb-0" id="categoryAssetsTable" style="display:none">
+                    <thead style="position: sticky; top: 0; z-index: 1;"><tr>
+                        <th class="ps-3">Asset</th>
+                        <th>Make / Model</th>
+                        <th>Status</th>
+                        <th>Assigned To</th>
+                        <th>Location</th>
+                        <th class="pe-3"></th>
+                    </tr></thead>
+                    <tbody id="categoryAssetsBody"></tbody>
+                </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+const categoryStatusBadge = {
+    'Active':    '<span class="badge badge-active">Active</span>',
+    'Inactive':  '<span class="badge badge-retired">Inactive</span>',
+    'In Repair': '<span class="badge badge-repair">In Repair</span>',
+    'Retired':   '<span class="badge badge-retired">Retired</span>',
+    'Lost':      '<span class="badge badge-lost">Lost</span>',
+};
+
+function showCategoryAssets(categoryId, categoryName) {
+    document.getElementById('categoryAssetsTitle').textContent = categoryName;
+    const loading = document.getElementById('categoryAssetsLoading');
+    const empty   = document.getElementById('categoryAssetsEmpty');
+    const table   = document.getElementById('categoryAssetsTable');
+    loading.style.display = 'block';
+    empty.style.display = 'none';
+    table.style.display = 'none';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('categoryAssetsModal')).show();
+
+    fetch('/it_manager/ajax/get_assets.php?category=' + categoryId)
+        .then(r => r.json())
+        .then(assets => {
+            loading.style.display = 'none';
+            if (!assets.length) { empty.style.display = 'block'; return; }
+            table.style.display = 'table';
+            document.getElementById('categoryAssetsBody').innerHTML = assets.map(a => `
+                <tr>
+                    <td class="ps-3"><a href="/it_manager/asset.php?id=${a.asset_id}" class="asset-tag text-decoration-none">${a.asset_tag}</a></td>
+                    <td>${[a.make, a.model].filter(Boolean).join(' ') || '<span class="text-muted">—</span>'}</td>
+                    <td>${categoryStatusBadge[a.status] ?? a.status}</td>
+                    <td class="small">${a.employee_name ?? '<span class="text-muted">—</span>'}</td>
+                    <td class="small">${a.location_name ? `${a.location_name} <span class="text-muted">(${a.campus_name})</span>` : '<span class="text-muted">—</span>'}</td>
+                    <td class="pe-3 text-end"><a href="/it_manager/asset.php?id=${a.asset_id}" class="btn btn-sm btn-outline-primary btn-action"><i class="fas fa-eye"></i></a></td>
+                </tr>
+            `).join('');
+        });
+}
+
 document.getElementById('saveCategoryBtn').addEventListener('click', () => {
     const name = document.getElementById('newCategoryName').value.trim();
     const errEl = document.getElementById('addCategoryError');

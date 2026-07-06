@@ -13,6 +13,7 @@ if (isset($_GET['next_tag'])) {
 $search   = '%' . trim($_GET['search']   ?? '') . '%';
 $category = (int)($_GET['category'] ?? 0);
 $status   = trim($_GET['status']   ?? '');
+$location = (int)($_GET['location'] ?? 0);
 
 $sql = "
     SELECT a.asset_id, a.asset_tag, a.make, a.model, a.serial_number, a.status,
@@ -29,8 +30,9 @@ $sql = "
 ";
 $params = [$search, $search, $search, $search];
 
-if ($category) { $sql .= " AND a.category_id = ?"; $params[] = $category; }
-if ($status)   { $sql .= " AND a.status = ?";       $params[] = $status;   }
+if ($category) { $sql .= " AND a.category_id = ?";          $params[] = $category; }
+if ($status)   { $sql .= " AND a.status = ?";                $params[] = $status;   }
+if ($location) { $sql .= " AND a.assigned_location_id = ?";  $params[] = $location; }
 
 $sql .= " ORDER BY a.asset_tag";
 
