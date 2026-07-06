@@ -40,6 +40,18 @@
                 </div>
             </div>
         </div>
+        <div class="col-12 col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 module-card" onclick="window.location.href='/entratrak/index.php'">
+                <div class="card-body text-center d-flex flex-column justify-content-center">
+                    <i class="fas fa-user-shield fa-4x mb-4" style="background: linear-gradient(to bottom, #f472b6 0%, #be185d 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"></i>
+                    <h2 class="card-title mb-2">Entratrak</h2>
+                    <p class="card-text">Entra ID user, license, and sign-in security dashboard</p>
+                    <div class="mt-3">
+                        <span class="badge bg-success px-3 py-2">Available</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="row justify-content-center mt-4">

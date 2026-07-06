@@ -1,2 +1,5 @@
 .env
 *.log
+entratrak/cache/
+entratrak/data/
+entratrak/ip2asn-combined.tsv.gz
