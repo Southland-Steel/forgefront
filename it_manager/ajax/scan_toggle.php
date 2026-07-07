@@ -24,9 +24,14 @@ if (!$tag) {
 
 $stmt = $pdo->prepare("
     SELECT a.asset_id, a.asset_tag, a.status, a.make, a.model,
-           ac.name AS category_name
+           a.assigned_employee_id, a.assigned_location_id,
+           ac.name AS category_name,
+           e.name AS employee_name,
+           l.name AS location_name
     FROM assets a
     LEFT JOIN asset_categories ac ON ac.category_id = a.category_id
+    LEFT JOIN employees e ON e.employee_id = a.assigned_employee_id
+    LEFT JOIN locations l ON l.location_id = a.assigned_location_id
     WHERE a.asset_tag = ?
 ");
 $stmt->execute([$tag]);
@@ -37,32 +42,32 @@ if (!$asset) {
     exit;
 }
 
-if ($asset['status'] === 'Active') {
-    $newStatus = 'Inactive';
-    $action    = 'Checked In';
-} elseif ($asset['status'] === 'Inactive') {
-    $newStatus = 'Active';
-    $action    = 'Checked Out';
-} else {
-    echo json_encode([
-        'success' => false,
-        'error'   => "Cannot toggle — status is \"{$asset['status']}\" (only Active/Inactive can be toggled)",
-        'asset_tag' => $asset['asset_tag'],
-    ]);
-    exit;
-}
+$oldStatus = $asset['status'];
+$hadEmployee = $asset['assigned_employee_id'] !== null;
+$hadLocation = $asset['assigned_location_id'] !== null;
 
-$pdo->prepare("UPDATE assets SET status = ?, updated_at = NOW() WHERE asset_id = ?")
-    ->execute([$newStatus, $asset['asset_id']]);
-logHistory($pdo, $asset['asset_id'], 'Status Changed', null, null, "$action via scan station");
+$pdo->prepare("
+    UPDATE assets
+    SET status = 'Inactive', assigned_employee_id = NULL, assigned_location_id = NULL, updated_at = NOW()
+    WHERE asset_id = ?
+")->execute([$asset['asset_id']]);
+
+if ($hadEmployee || $hadLocation) {
+    logHistory($pdo, $asset['asset_id'], 'Unassigned', null, null, 'Checked in via scan station');
+}
+logHistory($pdo, $asset['asset_id'], 'Status Changed', null, null, 'Checked in via scan station');
 
 echo json_encode([
-    'success'    => true,
-    'asset_tag'  => $asset['asset_tag'],
-    'asset_name' => trim($asset['make'] . ' ' . $asset['model']) ?: ($asset['category_name'] ?? ''),
-    'category'   => $asset['category_name'] ?? '',
-    'old_status' => $asset['status'],
-    'new_status' => $newStatus,
-    'action'     => $action,
-    'asset_id'   => $asset['asset_id'],
+    'success'       => true,
+    'asset_tag'     => $asset['asset_tag'],
+    'asset_name'    => trim($asset['make'] . ' ' . $asset['model']) ?: ($asset['category_name'] ?? ''),
+    'category'      => $asset['category_name'] ?? '',
+    'old_status'    => $oldStatus,
+    'new_status'    => 'Inactive',
+    'action'        => 'Checked In',
+    'asset_id'      => $asset['asset_id'],
+    'had_employee'  => $hadEmployee,
+    'had_location'  => $hadLocation,
+    'prev_employee' => $asset['employee_name'] ? trim($asset['employee_name']) : null,
+    'prev_location' => $asset['location_name'],
 ]);

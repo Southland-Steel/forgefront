@@ -292,6 +292,7 @@ $currentPage   = basename($_SERVER['PHP_SELF'], '.php');
                 'inventory' => ['label' => 'IT Inventory', 'icon' => 'fas fa-box',           'file' => 'inventory'],
                 'employees' => ['label' => 'Employees',    'icon' => 'fas fa-users',         'file' => 'employees'],
                 'locations' => ['label' => 'Locations',    'icon' => 'fas fa-location-dot',  'file' => 'locations'],
+                'checkin'   => ['label' => 'Check In',     'icon' => 'fas fa-barcode',       'file' => 'scan_station'],
                 'import'    => ['label' => 'CSV Import',   'icon' => 'fas fa-file-import',   'file' => 'import'],
             ];
             foreach ($sidebarItems as $key => $item): ?>

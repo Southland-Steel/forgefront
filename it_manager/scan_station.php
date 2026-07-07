@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 Auth::requireLogin();
-$activePage = '';
+$activePage = 'checkin';
 include __DIR__ . '/../includes/header.php';
 ?>
 <style>
@@ -14,7 +14,7 @@ include __DIR__ . '/../includes/header.php';
 
 <div class="container-fluid px-4 pt-3">
     <div class="page-header d-flex justify-content-between align-items-center mb-3">
-        <h4 class="page-title"><i class="fas fa-barcode me-2 it-header-icon"></i>Scan Station</h4>
+        <h4 class="page-title"><i class="fas fa-barcode me-2 it-header-icon"></i>Check In Station</h4>
         <span class="badge bg-success fs-6" id="statusBadge"><i class="fas fa-circle-dot me-1"></i>Listening</span>
     </div>
 
@@ -29,7 +29,7 @@ include __DIR__ . '/../includes/header.php';
                     <i class="fas fa-barcode me-1"></i>Submit
                 </button>
             </div>
-            <div class="form-text">Press <kbd>Enter</kbd> or click Submit. Any keystroke on this page goes straight to the input.</div>
+            <div class="form-text">Press <kbd>Enter</kbd> or click Submit. Scanning an asset clears its assigned employee and location and sets its status to <strong>Inactive</strong>. Any keystroke on this page goes straight to the input.</div>
         </div>
     </div>
 
@@ -102,28 +102,32 @@ function processScan() {
     });
 }
 
+function clearedText(d) {
+    const parts = [];
+    if (d.had_employee) parts.push(`unassigned from ${d.prev_employee ?? 'employee'}`);
+    if (d.had_location) parts.push(`removed from ${d.prev_location ?? 'location'}`);
+    return parts.length ? parts.join(', ') : 'no employee or location was assigned';
+}
+
 function showResult(d) {
     resultCard.style.display = 'block';
     if (d.success) {
-        const isOut = d.action === 'Checked Out';
-        const color = isOut ? '#d1f0e0' : '#e2e3e5';
-        const iconColor = isOut ? '#0a6640' : '#41464b';
-        const icon = isOut ? 'fa-arrow-right-from-bracket' : 'fa-arrow-right-to-bracket';
-        resultCard.style.border = `2px solid ${iconColor}`;
+        resultCard.style.border = '2px solid #41464b';
         resultBody.innerHTML = `
-            <div style="font-size:2.5rem;color:${iconColor}" class="mb-2">
-                <i class="fas ${icon}"></i>
+            <div style="font-size:2.5rem;color:#41464b" class="mb-2">
+                <i class="fas fa-arrow-right-to-bracket"></i>
             </div>
-            <div class="scan-action-badge mb-1" style="color:${iconColor}">${d.action}</div>
+            <div class="scan-action-badge mb-1" style="color:#41464b">Checked In</div>
             <div style="font-size:1.5rem;font-weight:700;font-family:monospace" class="mb-1">
                 <a href="/it_manager/asset.php?id=${d.asset_id}" class="text-decoration-none text-dark">${d.asset_tag}</a>
             </div>
             <div class="text-muted mb-2">${d.asset_name || d.category}</div>
-            <div class="status-arrow">
+            <div class="status-arrow mb-1">
                 <span class="badge bg-secondary">${d.old_status}</span>
                 <i class="fas fa-arrow-right mx-2"></i>
-                <span class="badge bg-${isOut ? 'success' : 'secondary'}">${d.new_status}</span>
-            </div>`;
+                <span class="badge bg-secondary">${d.new_status}</span>
+            </div>
+            <div class="text-muted small">${clearedText(d)}</div>`;
     } else {
         resultCard.style.border = '2px solid #842029';
         resultBody.innerHTML = `
@@ -139,15 +143,14 @@ function addLogEntry(d) {
     logTable.style.display = 'table';
     const tr = document.createElement('tr');
     if (d.success) {
-        const isOut = d.action === 'Checked Out';
         tr.innerHTML = `
             <td class="ps-3 text-muted small">${time}</td>
             <td style="font-family:monospace;font-weight:700">
                 <a href="/it_manager/asset.php?id=${d.asset_id}" class="text-decoration-none">${d.asset_tag}</a>
             </td>
             <td class="small">${d.asset_name || d.category}</td>
-            <td><span class="badge bg-${isOut ? 'success' : 'secondary'}">${d.action}</span></td>
-            <td class="pe-3 small text-muted">${d.old_status} → ${d.new_status}</td>`;
+            <td><span class="badge bg-secondary">${d.action}</span></td>
+            <td class="pe-3 small text-muted">${d.old_status} → ${d.new_status}, ${clearedText(d)}</td>`;
     } else {
         tr.innerHTML = `
             <td class="ps-3 text-muted small">${time}</td>
