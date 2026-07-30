@@ -290,6 +290,7 @@ $currentPage   = basename($_SERVER['PHP_SELF'], '.php');
             $sidebarItems = [
                 'index'     => ['label' => 'Dashboard',    'icon' => 'fas fa-gauge-high',   'file' => 'index'],
                 'inventory' => ['label' => 'IT Inventory', 'icon' => 'fas fa-box',           'file' => 'inventory'],
+                'printers'  => ['label' => 'Printers',     'icon' => 'fas fa-print',         'file' => 'printers'],
                 'employees' => ['label' => 'Employees',    'icon' => 'fas fa-users',         'file' => 'employees'],
                 'locations' => ['label' => 'Locations',    'icon' => 'fas fa-location-dot',  'file' => 'locations'],
                 'checkin'   => ['label' => 'Check In',     'icon' => 'fas fa-barcode',       'file' => 'scan_station'],
