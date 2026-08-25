@@ -9,7 +9,7 @@ return [
 
         'amite_manager' => [
             'label' => 'Amite Office',
-            'ip'    => '192.168.4.170',  // TODO: set actual label printer IP
+            'ip'    => '192.168.4.29',
         ],
     ],
 ];
