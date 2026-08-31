@@ -9,7 +9,7 @@ return [
 
         'amite_manager' => [
             'label' => 'Amite Office',
-            'ip'    => '192.168.4.29',
+            'ip'    => '192.168.4.12',
         ],
     ],
 ];
