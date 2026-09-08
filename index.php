@@ -52,6 +52,18 @@
                 </div>
             </div>
         </div>
+        <div class="col-12 col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 module-card" onclick="window.location.href='/roadmap/index.php'">
+                <div class="card-body text-center d-flex flex-column justify-content-center">
+                    <i class="fas fa-road fa-4x mb-4" style="background: linear-gradient(to bottom, #fb923c 0%, #c2410c 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"></i>
+                    <h2 class="card-title mb-2">Roadmap</h2>
+                    <p class="card-text">Track ideas, tasks, and what's due today or this week</p>
+                    <div class="mt-3">
+                        <span class="badge bg-success px-3 py-2">Available</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="row justify-content-center mt-4">
