@@ -64,6 +64,19 @@
                 </div>
             </div>
         </div>
+        <?php // TEMP: test card for the git puller — remove after the test ?>
+        <div class="col-12 col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 module-card">
+                <div class="card-body text-center d-flex flex-column justify-content-center">
+                    <i class="fas fa-flask fa-4x mb-4" style="background: linear-gradient(to bottom, #a78bfa 0%, #6d28d9 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"></i>
+                    <h2 class="card-title mb-2">Test</h2>
+                    <p class="card-text">Test card for the git puller</p>
+                    <div class="mt-3">
+                        <span class="badge bg-secondary px-3 py-2">Test</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="row justify-content-center mt-4">
