@@ -6,6 +6,36 @@ $pdo = getPDO();
 
 $items = $pdo->query("SELECT * FROM roadmap_items ORDER BY due_date IS NULL, due_date ASC, created_at DESC")->fetchAll();
 
+// -- People, for assignment and the filter --
+$users = $pdo->query("
+    SELECT user_id, TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) AS full_name
+    FROM ff_users
+    WHERE is_active = 1
+    ORDER BY first_name, last_name
+")->fetchAll();
+$userById = [];
+foreach ($users as $u) $userById[(int)$u['user_id']] = $u['full_name'];
+
+// How many goals each item has, and how many are done. Goals themselves live
+// on the item's own page (item.php) - here they are only a badge and a link.
+$goalCounts = [];
+foreach ($pdo->query("SELECT item_id, COUNT(*) AS total, SUM(status = 'done') AS done FROM roadmap_goals GROUP BY item_id") as $row) {
+    $goalCounts[(int)$row['item_id']] = ['total' => (int)$row['total'], 'done' => (int)$row['done']];
+}
+
+// The assignee filter is applied to $items BEFORE anything is bucketed, so the
+// timeline, every card tab and all the tab counts agree with it instead of
+// each one having to remember to apply it.
+$who = (string)($_GET['who'] ?? 'all');
+if ($who !== 'all' && $who !== 'none' && !isset($userById[(int)$who])) $who = 'all';
+if ($who !== 'all') {
+    $wantId = $who === 'none' ? null : (int)$who;
+    $items  = array_values(array_filter(
+        $items,
+        fn($i) => ($i['assigned_to'] === null ? null : (int)$i['assigned_to']) === $wantId
+    ));
+}
+
 $today   = date('Y-m-d');
 $dow     = (int)date('N'); // 1 = Monday ... 7 = Sunday
 $weekEnd = date('Y-m-d', strtotime("+" . (7 - $dow) . " days"));
@@ -27,6 +57,10 @@ $windowEnd    = date('Y-m-t', strtotime('+11 months', $firstMonthTs));
 // Zoom decides how fine the columns are: one per week, month, or quarter.
 $zoom = $_GET['zoom'] ?? 'week';
 if (!in_array($zoom, ['week', 'month', 'quarter'], true)) $zoom = 'week';
+
+// Zoom and assignee both live in the querystring, so every control has to
+// carry the other one's current value or clicking one resets the other.
+$rmUrl = fn(array $overrides) => '?' . http_build_query(array_merge(['zoom' => $zoom, 'who' => $who], $overrides));
 
 // The 12 months of the window are the backbone — every zoom level is derived
 // from them, so all three share the same quarter/month grouping.
@@ -126,7 +160,7 @@ function rmGroupCols(array $cols, string $by): array {
         if ($last !== null && $groups[$last]['val'] === $c[$by]) {
             $groups[$last]['span']++;
         } else {
-            $groups[] = ['val' => $c[$by], 'startCol' => 2 + $idx, 'span' => 1];
+            $groups[] = ['val' => $c[$by], 'startCol' => 3 + $idx, 'span' => 1];
         }
     }
     return $groups;
@@ -144,6 +178,12 @@ function findColIndex(array $cols, string $date): int {
 // (Content-sized columns would make "half the column" stop meaning "half the
 // week".) The task title is allowed to overflow a narrow bar instead.
 $colW = ['week' => 74, 'month' => 150, 'quarter' => 240][$zoom];
+
+// The two frozen columns ahead of the time axis. The task-name column is
+// sticky at exactly LANE_W, so these two values have to stay in step - they
+// are written into the CSS below rather than repeated as literals.
+const RM_LANE_W = 110;
+const RM_NAME_W = 270;
 
 // Tasks due within the window (anything overdue clamps to the first column).
 // Each bar also gets sub-column insets so it starts and ends at its real
@@ -219,12 +259,63 @@ $priorityColor = ['low' => '#64748b', 'medium' => '#d97706', 'high' => '#dc2626'
 
 include __DIR__ . '/../includes/header.php';
 
+// A name can't fit inside a timeline bar's label, so a person is drawn as an
+// initials avatar. The colour comes off the user id, so one person keeps the
+// same colour everywhere they appear on the page.
+function rmInitials(string $name): string {
+    $parts = preg_split('/\s+/', trim($name), -1, PREG_SPLIT_NO_EMPTY);
+    if (!$parts) return '?';
+    $last = count($parts) > 1 ? mb_substr($parts[count($parts) - 1], 0, 1) : '';
+    return mb_strtoupper(mb_substr($parts[0], 0, 1) . $last);
+}
+
+function rmAvatarColor(int $userId): string {
+    $palette = ['#2D6BF5', '#7c3aed', '#0891b2', '#059669', '#d97706', '#db2777', '#4f46e5'];
+    return $palette[$userId % count($palette)];
+}
+
+function rmAvatar($userId, array $userById, string $extraClass = ''): string {
+    $id = ($userId === null || $userId === '') ? null : (int)$userId;
+    if ($id === null || !isset($userById[$id])) return '';
+    $name = $userById[$id];
+    return '<span class="rm-avatar ' . $extraClass . '" style="background:' . rmAvatarColor($id) . '"'
+         . ' title="' . htmlspecialchars($name) . '">' . htmlspecialchars(rmInitials($name)) . '</span>';
+}
+
+// "2/3 goals done" on a task, doubling as the link to the task's own page
+// where its goals and their whiteboards live.
+function rmGoalBadge(array $goalCounts, $itemId): string {
+    $id = (int)$itemId;
+    if (!isset($goalCounts[$id])) return '';
+    $c = $goalCounts[$id];
+    return '<a class="rm-goal-badge" href="item.php?id=' . $id . '" onclick="event.stopPropagation()"'
+         . ' title="' . $c['done'] . ' of ' . $c['total'] . ' goals done">'
+         . '<i class="fas fa-diagram-project"></i>' . $c['done'] . '/' . $c['total'] . '</a>';
+}
+
 function chipColor(array $r, string $today, array $priorityColor): string {
     $isOverdue = $r['status'] !== 'done' && $r['due_date'] !== null && $r['due_date'] < $today;
     return $isOverdue ? '#dc2626' : $priorityColor[$r['priority']];
 }
 
-function renderReportCard(array $r, string $today, array $priorityColor, array $progressPct): string {
+/**
+ * How full a task's timeline bar should be, as a percentage, or NULL when
+ * there is nothing to go on.
+ *
+ * Progress comes from the task's goals — the share of them marked done — since
+ * that is the only real completion signal in the module. A task with no goals
+ * has no progress to report and keeps a solid bar rather than showing an empty
+ * one, which would read as "nothing done" when it actually means "not tracked".
+ */
+function rmGoalProgress(array $goalCounts, array $r): ?int {
+    // A task marked done is done, whatever its goals were left at.
+    if ($r['status'] === 'done') return 100;
+    $id = (int)$r['item_id'];
+    if (empty($goalCounts[$id]['total'])) return null;
+    return (int)round($goalCounts[$id]['done'] / $goalCounts[$id]['total'] * 100);
+}
+
+function renderReportCard(array $r, string $today, array $priorityColor, array $progressPct, array $userById, array $goalCounts): string {
     $pColor      = $priorityColor[$r['priority']];
     $isLate      = $r['status'] !== 'done' && $r['due_date'] !== null && $r['due_date'] < $today;
     $borderColor = $isLate ? '#dc2626' : $pColor;
@@ -235,8 +326,13 @@ function renderReportCard(array $r, string $today, array $priorityColor, array $
     ob_start(); ?>
     <div class="rm-card" style="border-left-color: <?= $borderColor ?>">
         <div class="rm-card-top">
-            <span class="rm-pill" style="background:<?= $pColor ?>1a;color:<?= $pColor ?>"><?= ucfirst($r['priority']) ?></span>
+            <div class="d-flex align-items-center gap-2">
+                <span class="rm-pill" style="background:<?= $pColor ?>1a;color:<?= $pColor ?>"><?= ucfirst($r['priority']) ?></span>
+                <?= rmAvatar($r['assigned_to'] ?? null, $userById) ?>
+                <?= rmGoalBadge($goalCounts, $r['item_id']) ?>
+            </div>
             <div class="rm-card-actions">
+                <a class="rm-icon-btn" title="Open" href="item.php?id=<?= (int)$r['item_id'] ?>"><i class="fas fa-up-right-from-square"></i></a>
                 <?php if ($r['status'] !== 'done'): ?>
                 <button class="rm-icon-btn rm-icon-success" title="Mark Done" onclick='markDone(<?= json_encode($r) ?>)'><i class="fas fa-check"></i></button>
                 <?php endif; ?>
@@ -301,9 +397,16 @@ function renderReportCard(array $r, string $today, array $priorityColor, array $
 
 .rm-corner {
     position: sticky; left: 0; z-index: 6;
-    background: #fff; border-right: 2px solid #aab5c4; border-bottom: 1px solid #eef1f6;
-    display: flex; align-items: center; justify-content: flex-end; padding: 0 .7rem;
+    background: #fff; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #eef1f6;
+    display: flex; align-items: center; justify-content: flex-start; padding: 0 .9rem;
     font-size: .64rem; font-weight: 700; color: #b6bfcc; text-transform: uppercase; letter-spacing: .05em;
+}
+
+/* Column 2's header is blank but carries .rm-name's 2px right edge, so both
+   frozen dividers run unbroken from the top of the header to the last row. */
+.rm-corner-name {
+    position: sticky; left: <?= RM_LANE_W ?>px; z-index: 6;
+    background: #fff; border-right: 2px solid #aab5c4; border-bottom: 1px solid #eef1f6;
 }
 
 .rm-q {
@@ -341,7 +444,7 @@ function renderReportCard(array $r, string $today, array $priorityColor, array $
    lane you're looking at is always named — you can't lose your place. */
 .rm-lane {
     position: sticky; left: 0; z-index: 5;
-    border-right: 2px solid #aab5c4;
+    border-right: 1px solid #cbd5e1;
     padding: .7rem .9rem; font-size: .8rem; font-weight: 700; color: #334155;
     display: flex; align-items: flex-start;
 }
@@ -385,23 +488,52 @@ function renderReportCard(array $r, string $today, array $priorityColor, array $
    It is NOT clipped: its content contributes to the column's width, so a
    week column widens to fit its pill (see minmax(...,auto) on the grid).
    The title is capped so one long name can't blow out a column. */
-/* The bar is sized purely by its dates (grid span + trim margins), so it can
-   be only a few pixels wide. The name therefore lives in .rm-chip-label,
-   anchored to the bar's own right edge (left:100%) and taken out of flow, so
-   it never widens or distorts the bar — the usual Gantt convention of a bar
-   with its label beside it. */
+/* The bar is sized purely by its dates, so it can be only a few pixels wide
+   and can sit anywhere on the axis — including hard against the right edge.
+   That is why the name is NOT attached to the bar: a label anchored to the
+   bar (the old left:100% approach) runs off the end of the window for
+   anything scheduled late, taking its action buttons out of reach with it.
+   The name lives in its own frozen column instead. */
 .rm-chip {
     position: relative; justify-self: stretch; align-self: center; z-index: 2;
     box-sizing: border-box; min-width: 6px; height: 18px; border-radius: 4px;
-    cursor: pointer; overflow: visible; box-shadow: 0 1px 2px rgba(0,0,0,.12);
+    cursor: pointer; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.12);
 }
 .rm-chip:hover { z-index: 3; box-shadow: 0 2px 6px rgba(0,0,0,.22); }
-.rm-chip.is-done { opacity: .5; }
-.rm-chip-label {
-    position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
-    margin-left: 7px; display: flex; align-items: center; gap: 5px;
-    white-space: nowrap; font-size: .74rem; font-weight: 600; color: #334155;
+/* ══ Progress fill ══
+   A bar is filled to the share of its goals that are done; the rest is the
+   same colour hatched, so an unstarted task still reads as a bar rather than
+   as a gap in the row. The hatch and the fill are both built from the task's
+   own colour inline, so an overdue bar hatches red like it fills red.
+   The fill only rounds its LEFT corners — the chip clips the right ones for
+   it, so a 100% fill still comes out fully rounded without a second rule. */
+.rm-chip-fill {
+    position: absolute; top: 0; bottom: 0; left: 0;
+    border-radius: 4px 0 0 4px;
 }
+.rm-chip.is-done { opacity: .5; }
+/* ══ The frozen task-name column ══
+   Sticky at exactly the lane column's width, so the two panes stay locked
+   together while the time axis scrolls underneath. It needs an opaque
+   background (it inherits the lane's) or bars show through it. */
+.rm-name {
+    position: sticky; left: <?= RM_LANE_W ?>px; z-index: 5;
+    border-right: 2px solid #aab5c4;
+    padding: .45rem .6rem; cursor: pointer;
+    display: flex; align-items: center; gap: .4rem; min-width: 0;
+}
+.rm-name:hover { filter: brightness(.97); }
+.rm-name-title {
+    flex: 1; min-width: 0; font-size: .78rem; font-weight: 600; color: #334155;
+    line-height: 1.25;
+    /* Capped at two lines: a long name stays readable without letting one
+       task make its row twice as tall as the rest. */
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.rm-name-title.is-done { color: #94a3b8; text-decoration: line-through; }
+.rm-name-actions { display: flex; gap: 3px; opacity: 0; transition: opacity .15s ease; flex-shrink: 0; }
+.rm-name:hover .rm-name-actions { opacity: 1; }
 .rm-chip-actions { display: flex; gap: 3px; opacity: 0; transition: opacity .15s ease; }
 .rm-chip:hover .rm-chip-actions { opacity: 1; }
 .rm-chip-btn {
@@ -437,6 +569,41 @@ function renderReportCard(array $r, string $today, array $priorityColor, array $
 .rm-pill { display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
 .rm-promote-btn { border: 1px solid var(--rm-blue); background: transparent; color: var(--rm-blue); font-size: .74rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; cursor: pointer; }
 .rm-promote-btn:hover { background: var(--rm-blue); color: #fff; }
+/* Goal count on a task, and the way through to the task's own page. */
+.rm-goal-badge {
+    display: inline-flex; align-items: center; gap: 4px; text-decoration: none;
+    background: #eef2ff; color: #4338ca; font-size: .66rem; font-weight: 700;
+    padding: 1px 7px; border-radius: 999px; flex-shrink: 0;
+}
+.rm-goal-badge:hover { background: #e0e7ff; color: #312e81; }
+/* The chip and card action buttons are <button>s; these same-looking controls
+   are <a>s, so they need the anchor defaults knocked back out. */
+a.rm-chip-btn, a.rm-icon-btn { color: #334155; text-decoration: none; }
+
+/* Initials avatar. Sized to sit inside an 18px-tall timeline bar label (sm),
+   or beside a card's priority pill (base). */
+.rm-avatar {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 20px; height: 20px; border-radius: 50%; line-height: 1;
+    color: #fff; font-size: .62rem; font-weight: 700;
+}
+.rm-avatar-sm { width: 16px; height: 16px; font-size: .55rem; }
+
+/* Tabs and the assignee filter share one row. */
+.rm-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem 1.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+.rm-toolbar .rm-tabs { margin-bottom: 0; }
+.rm-who { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+.rm-who-label { font-size: .72rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; margin-right: .2rem; }
+.rm-who-btn {
+    display: inline-flex; align-items: center; gap: .35rem; text-decoration: none;
+    font-size: .78rem; font-weight: 600; color: #64748b;
+    background: #eef1f6; padding: .2rem .7rem .2rem .25rem; border-radius: 999px; transition: all .15s ease;
+}
+.rm-who-btn.is-plain { padding-left: .8rem; }
+.rm-who-btn:hover { color: #1e293b; }
+.rm-who-btn.active { background: var(--rm-blue); color: #fff; }
+.rm-who-btn.active .rm-avatar { box-shadow: 0 0 0 2px rgba(255,255,255,.75); }
+
 .rm-empty { text-align: center; padding: 4rem 1rem; color: #94a3b8; background: #fff; border-radius: 12px; }
 .rm-empty i { font-size: 2.5rem; opacity: .25; display: block; margin-bottom: 1rem; }
 </style>
@@ -450,11 +617,25 @@ function renderReportCard(array $r, string $today, array $priorityColor, array $
         </div>
     </div>
 
-    <div class="rm-tabs" data-group="main">
-        <button class="rm-tab active" data-pane="pane-timeline">Timeline <span class="count"><?= count($timelineTasks) ?></span></button>
-        <button class="rm-tab" data-pane="pane-reports">Reports <span class="count"><?= count($reportToday) ?></span></button>
-        <button class="rm-tab" data-pane="pane-ideas">Ideas <span class="count"><?= count($ideas) ?></span></button>
-        <button class="rm-tab" data-pane="pane-archived">Archived <span class="count"><?= count($archived) ?></span></button>
+    <div class="rm-toolbar">
+        <div class="rm-tabs" data-group="main">
+            <button class="rm-tab active" data-pane="pane-timeline">Timeline <span class="count"><?= count($timelineTasks) ?></span></button>
+            <button class="rm-tab" data-pane="pane-reports">Reports <span class="count"><?= count($reportToday) ?></span></button>
+            <button class="rm-tab" data-pane="pane-ideas">Ideas <span class="count"><?= count($ideas) ?></span></button>
+            <button class="rm-tab" data-pane="pane-archived">Archived <span class="count"><?= count($archived) ?></span></button>
+        </div>
+
+        <?php /* Filters every tab at once - it is applied to $items up front. */ ?>
+        <div class="rm-who">
+            <span class="rm-who-label">Assignee</span>
+            <a class="rm-who-btn is-plain <?= $who === 'all' ? 'active' : '' ?>" href="<?= $rmUrl(['who' => 'all']) ?>">Everyone</a>
+            <?php foreach ($users as $u): $uid = (int)$u['user_id']; ?>
+            <a class="rm-who-btn <?= $who === (string)$uid ? 'active' : '' ?>" href="<?= $rmUrl(['who' => $uid]) ?>">
+                <?= rmAvatar($uid, $userById) ?><?= htmlspecialchars(explode(' ', $u['full_name'])[0]) ?>
+            </a>
+            <?php endforeach; ?>
+            <a class="rm-who-btn is-plain <?= $who === 'none' ? 'active' : '' ?>" href="<?= $rmUrl(['who' => 'none']) ?>">Unassigned</a>
+        </div>
     </div>
 
     <!-- ══ Timeline ══ -->
@@ -462,16 +643,16 @@ function renderReportCard(array $r, string $today, array $priorityColor, array $
         <div class="rm-zoom">
             <span class="rm-zoom-label">Zoom</span>
             <?php foreach (['week' => 'Weeks', 'month' => 'Months', 'quarter' => 'Quarters'] as $z => $zLabel): ?>
-            <a class="rm-zoom-btn <?= $zoom === $z ? 'active' : '' ?>" href="?zoom=<?= $z ?>"><?= $zLabel ?></a>
+            <a class="rm-zoom-btn <?= $zoom === $z ? 'active' : '' ?>" href="<?= $rmUrl(['zoom' => $z]) ?>"><?= $zLabel ?></a>
             <?php endforeach; ?>
         </div>
         <div class="rm-timeline-wrap" data-scroll-left="<?= $scrollLeftPx ?>">
             <?php /* Fixed column width, so the time axis is linear and a bar's width can
                      be proportional to its dates. Content-sized columns would break
                      that (a column's width would depend on its pill's text). */ ?>
-            <div class="rm-timeline-grid" style="grid-template-columns: 150px repeat(<?= $numCols ?>, <?= $colW ?>px); grid-template-rows: repeat(<?= $totalGridRows ?>, auto); width: <?= 150 + $numCols * $colW ?>px; min-width: 100%">
+            <div class="rm-timeline-grid" style="grid-template-columns: <?= RM_LANE_W ?>px <?= RM_NAME_W ?>px repeat(<?= $numCols ?>, <?= $colW ?>px); grid-template-rows: repeat(<?= $totalGridRows ?>, auto); width: <?= RM_LANE_W + RM_NAME_W + $numCols * $colW ?>px; min-width: 100%">
 
-                <div class="rm-today-col" style="grid-column: <?= 2 + $curColIdx ?>; grid-row: 1 / -1">
+                <div class="rm-today-col" style="grid-column: <?= 3 + $curColIdx ?>; grid-row: 1 / -1">
                     <div class="rm-today" style="left: <?= $todayDayPct ?>%"></div>
                 </div>
 
@@ -481,9 +662,10 @@ function renderReportCard(array $r, string $today, array $priorityColor, array $
 
                 <?php foreach ($headerRows as $hri => $hr): $rowNum = $hri + 1; ?>
                 <div class="rm-corner" style="grid-row:<?= $rowNum ?>;grid-column:1"><?= htmlspecialchars($hr['corner']) ?></div>
+                <div class="rm-corner-name" style="grid-row:<?= $rowNum ?>;grid-column:2"></div>
                 <?php if ($hr['kind'] === 'labels'): ?>
                     <?php foreach ($cols as $ci => $c): ?>
-                    <div class="<?= $labelRowClass ?> <?= $c['isCurrent'] ? 'is-now' : '' ?> <?= $c['isHeavy'] ? 'is-month-end' : '' ?>" style="grid-row:<?= $rowNum ?>;grid-column:<?= 2 + $ci ?>"><?= htmlspecialchars($c['label']) ?><?php if ($zoom === 'quarter' && $c['qIdx'] === 0): ?><span class="rm-now-tag">NOW</span><?php endif; ?></div>
+                    <div class="<?= $labelRowClass ?> <?= $c['isCurrent'] ? 'is-now' : '' ?> <?= $c['isHeavy'] ? 'is-month-end' : '' ?>" style="grid-row:<?= $rowNum ?>;grid-column:<?= 3 + $ci ?>"><?= htmlspecialchars($c['label']) ?><?php if ($zoom === 'quarter' && $c['qIdx'] === 0): ?><span class="rm-now-tag">NOW</span><?php endif; ?></div>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <?php foreach ($hr['groups'] as $g):
@@ -498,39 +680,71 @@ function renderReportCard(array $r, string $today, array $priorityColor, array $
                 <!-- Body: one row per task, one empty slot per column per row -->
                 <?php $laneNo = 0; foreach ($laneRowInfo as $laneKey => $info): $laneNo++; ?>
                 <div class="rm-lane lane-<?= $laneKey ?> <?= $laneNo > 1 ? 'is-lane-start' : '' ?>" style="grid-column:1;grid-row:<?= $info['startRow'] ?> / span <?= $info['rowCount'] ?>"><?= htmlspecialchars($lanes[$laneKey]) ?></div>
+                <?php /* The task-name column. One cell per row, so a name can never
+                         collide with a bar, run off the right edge, or take its
+                         action buttons out of reach - which is exactly what the old
+                         floating labels did. */ ?>
+                <?php foreach ($info['tasks'] as $i => $r):
+                    $isLate = $r['status'] !== 'done' && $r['due_date'] !== null && $r['due_date'] < $today;
+                ?>
+                <div class="rm-name lane-<?= $laneKey ?> <?= ($i === 0 && $laneNo > 1) ? 'is-lane-start' : '' ?>"
+                     style="grid-column:2;grid-row:<?= $info['startRow'] + $i ?>"
+                     onclick='openEditModal(<?= json_encode($r) ?>)'>
+                    <?= rmAvatar($r['assigned_to'], $userById, 'rm-avatar-sm') ?>
+                    <span class="rm-name-title <?= $laneKey === 'done' ? 'is-done' : '' ?>" title="<?= htmlspecialchars($r['title']) ?>">
+                        <?php if ($isLate): ?><i class="fas fa-clock" style="font-size:.6rem;color:#dc2626"></i> <?php endif; ?>
+                        <?= htmlspecialchars($r['title']) ?>
+                    </span>
+                    <?= rmGoalBadge($goalCounts, $r['item_id']) ?>
+                    <span class="rm-name-actions">
+                        <a class="rm-chip-btn" title="Open" href="item.php?id=<?= (int)$r['item_id'] ?>" onclick="event.stopPropagation()"><i class="fas fa-up-right-from-square"></i></a>
+                        <?php if ($r['status'] !== 'done'): ?>
+                        <button class="rm-chip-btn" title="Mark Done" onclick='event.stopPropagation(); markDone(<?= json_encode($r) ?>)'><i class="fas fa-check"></i></button>
+                        <?php endif; ?>
+                        <button class="rm-chip-btn" title="Delete" onclick='event.stopPropagation(); confirmDelete(<?= $r['item_id'] ?>, <?= htmlspecialchars(json_encode($r['title'])) ?>)'><i class="fas fa-trash-can"></i></button>
+                    </span>
+                </div>
+                <?php endforeach; ?>
+                <?php if (empty($info['tasks'])): ?>
+                <div class="rm-name lane-<?= $laneKey ?> <?= $laneNo > 1 ? 'is-lane-start' : '' ?>" style="grid-column:2;grid-row:<?= $info['startRow'] ?>"></div>
+                <?php endif; ?>
+
                 <?php for ($ri = 0; $ri < $info['rowCount']; $ri++): ?>
                     <?php foreach ($cols as $ci => $c): ?>
-                    <div class="rm-slot lane-<?= $laneKey ?> <?= $c['isCurrent'] ? 'is-now' : '' ?> <?= $c['isHeavy'] ? 'is-month-end' : '' ?> <?= ($ri === 0 && $laneNo > 1) ? 'is-lane-start' : '' ?>" style="grid-column:<?= 2 + $ci ?>;grid-row:<?= $info['startRow'] + $ri ?>"></div>
+                    <div class="rm-slot lane-<?= $laneKey ?> <?= $c['isCurrent'] ? 'is-now' : '' ?> <?= $c['isHeavy'] ? 'is-month-end' : '' ?> <?= ($ri === 0 && $laneNo > 1) ? 'is-lane-start' : '' ?>" style="grid-column:<?= 3 + $ci ?>;grid-row:<?= $info['startRow'] + $ri ?>"></div>
                     <?php endforeach; ?>
                 <?php endfor; ?>
 
                 <?php foreach ($info['tasks'] as $i => $r):
                     $c        = chipColor($r, $today, $priorityColor);
                     $isLate   = $r['status'] !== 'done' && $r['due_date'] !== null && $r['due_date'] < $today;
-                    $colStart = 2 + $r['_startCol'];
-                    $colEnd   = 3 + $r['_endCol'];
+                    $colStart = 3 + $r['_startCol'];
+                    $colEnd   = 4 + $r['_endCol'];
                     // The bar spans the columns its date range touches, then
                     // the margins trim it back to the exact start and due
                     // dates within the first and last of those columns.
                     $style = "grid-column:{$colStart} / {$colEnd};grid-row:" . ($info['startRow'] + $i)
-                           . ";margin-left:{$r['_leadPx']}px;margin-right:{$r['_trailPx']}px"
-                           . ";background:{$c}";
+                           . ";margin-left:{$r['_leadPx']}px;margin-right:{$r['_trailPx']}px";
                     $dates = $r['start_date'] && $r['start_date'] !== $r['due_date']
                         ? date('M j', strtotime($r['start_date'])) . ' – ' . date('M j', strtotime($r['due_date']))
                         : date('M j', strtotime($r['due_date']));
+
+                    // Untracked tasks stay solid; the rest are hatched behind a
+                    // fill sized to their finished goals. The 8-digit hex adds
+                    // alpha to the task's own colour, so both layers stay on it.
+                    $pct   = rmGoalProgress($goalCounts, $r);
+                    $inner = '';
+                    if ($pct === null) {
+                        $style .= ";background:{$c}";
+                    } else {
+                        $style .= ";background-color:{$c}1f"
+                                . ";background-image:repeating-linear-gradient(45deg,{$c}59 0 3px,transparent 3px 7px)";
+                        $inner  = '<div class="rm-chip-fill" style="width:' . $pct . '%;background:' . $c . '"></div>';
+                        $gc     = $goalCounts[(int)$r['item_id']] ?? null;
+                        $dates .= $gc ? " — {$gc['done']}/{$gc['total']} goals done" : ' — done';
+                    }
                 ?>
-                <div class="rm-chip <?= $laneKey === 'done' ? 'is-done' : '' ?>" style="<?= $style ?>" title="<?= htmlspecialchars($r['title']) ?> — <?= $dates ?>" onclick='openEditModal(<?= json_encode($r) ?>)'>
-                    <div class="rm-chip-label">
-                        <?php if ($isLate): ?><i class="fas fa-clock" style="font-size:.6rem;color:#dc2626"></i><?php endif; ?>
-                        <span><?= htmlspecialchars($r['title']) ?></span>
-                        <span class="rm-chip-actions">
-                            <?php if ($r['status'] !== 'done'): ?>
-                            <button class="rm-chip-btn" title="Mark Done" onclick='event.stopPropagation(); markDone(<?= json_encode($r) ?>)'><i class="fas fa-check"></i></button>
-                            <?php endif; ?>
-                            <button class="rm-chip-btn" title="Delete" onclick='event.stopPropagation(); confirmDelete(<?= $r['item_id'] ?>, <?= htmlspecialchars(json_encode($r['title'])) ?>)'><i class="fas fa-trash-can"></i></button>
-                        </span>
-                    </div>
-                </div>
+                <div class="rm-chip <?= $laneKey === 'done' ? 'is-done' : '' ?>" style="<?= $style ?>" title="<?= htmlspecialchars($r['title']) ?> — <?= $dates ?>" onclick='openEditModal(<?= json_encode($r) ?>)'><?= $inner ?></div>
                 <?php endforeach; ?>
                 <?php endforeach; ?>
             </div>
@@ -547,14 +761,14 @@ function renderReportCard(array $r, string $today, array $priorityColor, array $
             <?php if (empty($reportToday)): ?>
             <div class="rm-empty"><i class="fas fa-mug-hot"></i><p>Nothing due today — you're clear.</p></div>
             <?php else: ?>
-            <div class="rm-grid"><?php foreach ($reportToday as $r): ?><?= renderReportCard($r, $today, $priorityColor, $progressPct) ?><?php endforeach; ?></div>
+            <div class="rm-grid"><?php foreach ($reportToday as $r): ?><?= renderReportCard($r, $today, $priorityColor, $progressPct, $userById, $goalCounts) ?><?php endforeach; ?></div>
             <?php endif; ?>
         </div>
         <div class="rm-pane" data-group="report" id="pane-report-week">
             <?php if (empty($reportWeek)): ?>
             <div class="rm-empty"><i class="fas fa-calendar-week"></i><p>Nothing due this week.</p></div>
             <?php else: ?>
-            <div class="rm-grid"><?php foreach ($reportWeek as $r): ?><?= renderReportCard($r, $today, $priorityColor, $progressPct) ?><?php endforeach; ?></div>
+            <div class="rm-grid"><?php foreach ($reportWeek as $r): ?><?= renderReportCard($r, $today, $priorityColor, $progressPct, $userById, $goalCounts) ?><?php endforeach; ?></div>
             <?php endif; ?>
         </div>
     </div>
@@ -568,8 +782,13 @@ function renderReportCard(array $r, string $today, array $priorityColor, array $
             <?php foreach ($ideas as $r): $pColor = $priorityColor[$r['priority']]; $pct = $progressPct[$r['status']]; ?>
             <div class="rm-card" style="border-left-color: <?= $pColor ?>">
                 <div class="rm-card-top">
-                    <span class="rm-pill" style="background:<?= $pColor ?>1a;color:<?= $pColor ?>"><?= ucfirst($r['priority']) ?></span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="rm-pill" style="background:<?= $pColor ?>1a;color:<?= $pColor ?>"><?= ucfirst($r['priority']) ?></span>
+                        <?= rmAvatar($r['assigned_to'], $userById) ?>
+                        <?= rmGoalBadge($goalCounts, $r['item_id']) ?>
+                    </div>
                     <div class="rm-card-actions">
+                        <a class="rm-icon-btn" title="Open" href="item.php?id=<?= (int)$r['item_id'] ?>"><i class="fas fa-up-right-from-square"></i></a>
                         <button class="rm-icon-btn" title="Edit" onclick='openEditModal(<?= json_encode($r) ?>)'><i class="fas fa-pencil"></i></button>
                         <button class="rm-icon-btn rm-icon-danger" title="Delete" onclick="confirmDelete(<?= $r['item_id'] ?>, <?= htmlspecialchars(json_encode($r['title'])) ?>)"><i class="fas fa-trash-can"></i></button>
                     </div>
@@ -596,9 +815,10 @@ function renderReportCard(array $r, string $today, array $priorityColor, array $
             <?php foreach ($archived as $r): $pColor = $priorityColor[$r['priority']]; ?>
             <div class="rm-card" style="border-left-color: <?= $pColor ?>; opacity: .7">
                 <div class="rm-card-top">
-                    <div class="d-flex gap-1">
+                    <div class="d-flex align-items-center gap-1">
                         <span class="rm-pill" style="background:#e2e8f0;color:#475569"><?= $r['type'] === 'idea' ? 'Idea' : 'Task' ?></span>
                         <span class="rm-pill" style="background:<?= $pColor ?>1a;color:<?= $pColor ?>"><?= ucfirst($r['priority']) ?></span>
+                        <?= rmAvatar($r['assigned_to'], $userById, 'ms-1') ?>
                     </div>
                     <div class="rm-card-actions">
                         <button class="rm-icon-btn" title="Edit" onclick='openEditModal(<?= json_encode($r) ?>)'><i class="fas fa-pencil"></i></button>
@@ -661,6 +881,15 @@ function renderReportCard(array $r, string $today, array $priorityColor, array $
                             <option value="archived">Archived</option>
                         </select>
                     </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Assignee</label>
+                    <select class="form-select" id="itemAssignedTo">
+                        <option value="">Unassigned</option>
+                        <?php foreach ($users as $u): ?>
+                        <option value="<?= (int)$u['user_id'] ?>"><?= htmlspecialchars($u['full_name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="row g-3 mb-3" id="dueDateGroup">
                     <div class="col-6">
@@ -730,7 +959,7 @@ function onTypeChange() {
 
 function openAddModal(type) {
     document.getElementById('itemModalTitle').textContent = type === 'task' ? 'Add Task' : 'Add Idea';
-    ['editItemId','itemTitle','itemDescription','itemStartDate','itemDueDate'].forEach(id => document.getElementById(id).value = '');
+    ['editItemId','itemTitle','itemDescription','itemStartDate','itemDueDate','itemAssignedTo'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('itemType').value = type;
     document.getElementById('itemPriority').value = 'medium';
     document.getElementById('itemStatus').value = 'backlog';
@@ -749,6 +978,7 @@ function openEditModal(item) {
     document.getElementById('itemStatus').value      = item.status;
     document.getElementById('itemStartDate').value   = item.start_date ?? '';
     document.getElementById('itemDueDate').value     = item.due_date ?? '';
+    document.getElementById('itemAssignedTo').value   = item.assigned_to ?? '';
     document.getElementById('itemModalError').style.display = 'none';
     onTypeChange();
     bootstrap.Modal.getOrCreateInstance(document.getElementById('itemModal')).show();
@@ -783,6 +1013,7 @@ document.getElementById('saveItemBtn').addEventListener('click', () => {
         status: document.getElementById('itemStatus').value,
         start_date: document.getElementById('itemStartDate').value || null,
         due_date: document.getElementById('itemDueDate').value || null,
+        assigned_to: document.getElementById('itemAssignedTo').value || null,
     };
     if (!payload.title) {
         errEl.textContent = 'Title is required.';
